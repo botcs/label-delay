@@ -1,1 +1,139 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Annotation Delay Visualization</title><script src="https://d3js.org/d3.v5.min.js"></script><style>line.data {stroke: blue; stroke-width: 2;}line.annotated {stroke: green; stroke-width: 2;}</style></head><body><svg width="800" height="600"></svg><script>const svg = d3.select("svg");const margin = {top: 20, right: 20, bottom: 30, left: 50}, width = +svg.attr("width") - margin.left - margin.right, height = +svg.attr("height") - margin.top - margin.bottom;const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");const x = d3.scaleLinear().rangeRound([0, width]);const y = d3.scaleLinear().rangeRound([height, 0]);let dataPoints = [], annotatedPoints = [];function addData() {const newValue = Math.random() * height;dataPoints.push(newValue);if (dataPoints.length > width) dataPoints.shift();setTimeout(() => {annotatedPoints.push(newValue);if (annotatedPoints.length > width) annotatedPoints.shift();update();}, 2000);update();}function update() {x.domain([0, width]);y.domain([0, d3.max(dataPoints)]);const dataLine = d3.line().x((d, i) => x(i)).y(d => y(d));const annotatedLine = d3.line().x((d, i) => x(i)).y(d => y(d));g.selectAll("path.data").data([dataPoints]).join("path").attr("class", "data").attr("d", dataLine);g.selectAll("path.annotated").data([annotatedPoints]).join("path").attr("class", "annotated").attr("d", annotatedLine);}setInterval(addData, 1000);</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modeling Label Delay in Continual Learning</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond&display=swap" rel="stylesheet">
+
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+    </script>
+    <!-- <script type="text/javascript" async
+        src="http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+    </script> -->
+    <script type="text/javascript" async
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+
+    <style>
+        #viz {
+            border: 2px solid black;
+        }
+        #primary-content {
+            margin: 0 auto;
+            max-width: 1000px;
+            padding: 30px;
+        }
+        .image-container {
+            overflow: hidden;
+            position: relative;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .grayscale {
+            filter: url(#grayscale);
+            filter: grayscale(100%);
+        }
+        .button-rect {
+            fill: #ccc;
+        }
+
+        .button-rect:hover {
+            fill: #aaa; /* Darker shade for hover effect */
+            cursor: pointer;
+        }
+
+        .button-text {
+            pointer-events: none; /* This makes sure text doesn't interfere with the hover effect */
+        }
+
+        .fig{
+            /* margin: 0 auto; */
+            max-width: 1000px;
+            /* padding: 30px; */
+            text-align: justify;
+
+        }
+
+        body {
+            font-family: 'EB Garamond', serif;
+            font-size: 22px;
+            text-align: justify;
+        }
+
+        svg {
+            border: 2px solid gray;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="primary-content">
+        <center>
+            <h1>Modeling Label Delay in Continual Learning</h1>
+            <h3>Botos Csaba<sup>12</sup>*,  Wenxuan Zhang<sup>3</sup>*, Matthias Müller<sup>2</sup>, Ser-Nam Lim<sup>4</sup>,  Mohamed Elhoseiny<sup>3</sup>,  Philip Torr<sup>1</sup>,  Adel Bibi<sup>1</sup></h3>
+            <h3><sup>1</sup>University of Oxford, <sup>2</sup>Intel, <sup>3</sup>KAUST, <sup>4</sup>Facebook AI Research, * Equal contribution</h3>
+
+            <div id="fig1" class="fig">
+                <svg width="1000" height="500" id="fig1-svg">
+                    <defs id="fig1-defs">
+                        <filter id="grayscale">
+                            <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
+                        </filter>
+                        <marker
+                            id="arrow"
+                            markerUnits="strokeWidth"
+                            markerWidth="12"
+                            markerHeight="12"
+                            viewBox="0 0 12 12"
+                            refX="6"
+                            refY="6"
+                            orient="auto">
+                            <path d="M2,2 L10,6 L2,10 L6,6 L2,2" style="fill: rgb(0, 0, 0);"></path>
+                        </marker>
+                    </defs>
+                </svg>
+                Our proposed Continual Learning setting considering <b>Label Delay</b> allows us to model a wide range of real-world applications where new raw data is revealed significantly sooner by the data stream $\mathcal{S}_{\mathcal{X}}$ than the annotation process $\mathcal{S}_{\mathcal{Y}}$ can provide the corresponding labels. The main objective is to maximize the accuracy on the newest <b>Eval</b> data using both the samples that have already received their label (in colour) and the more recent samples that are yet to be labeled (in gray).
+                <!-- The goal is to learn a model that can perform well on a sequence of tasks, where the labels for each task are delayed by a fixed number of steps. We propose a simple yet effective approach to model label delay, which we call <b>Delayed Labels</b>. We show that our approach can be used to model a wide range of label delay distributions, and that it can be easily integrated into existing continual learning methods. We evaluate our approach on a variety of continual learning benchmarks, and show that it consistently outperforms existing methods. -->
+            </div>
+            
+
+            <!-- <div id="fig2" class="fig">
+                <svg width="700" height="300" id="fig2-svg">
+                    <defs id="fig2-defs">
+                        <filter id="grayscale">
+                            <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
+                        </filter>
+                        <marker
+                            id="arrow"
+                            markerUnits="strokeWidth"
+                            markerWidth="12"
+                            markerHeight="12"
+                            viewBox="0 0 12 12"
+                            refX="6"
+                            refY="6"
+                            orient="auto">
+                            <path d="M2,2 L10,6 L2,10 L6,6 L2,2" style="fill: rgb(0, 0, 0);"></path>
+                        </marker>
+                    </defs>
+                </svg>
+            </div> -->
+        </center>
+    </div>
+
+    <script src="fig1.js"></script>
+    <!-- <script src="fig2.js"></script>
+    <script src="fig3.js"></script> -->
+
+
+</body>
+
+</html>
