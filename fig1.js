@@ -313,17 +313,17 @@ delayed_legend = timeline.append("g")
 // Draw curly brace for the label delay
 // brace_x1 = 470;
 // brace_x2 = 780;
-brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+let brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
+let brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
 brace_y = timelineHeight + 50;
 brace_xmid = (brace_x1 + brace_x2) / 2;
-brace = delayed_legend.append("path")
+const brace = delayed_legend.append("path")
     .attr("d", makeCurlyBrace(brace_x1, brace_y, brace_x2, brace_y, 25, 0.6))
     .attr("stroke", "black")
     .attr("stroke-width", 2)
     .attr("fill", "none")
 
-brace_text = delayed_legend.append("text")
+const brace_text = delayed_legend.append("text")
     .attr("x", brace_xmid)
     .attr("y", timelineHeight + 100)
     .attr("text-anchor", "middle")
@@ -373,8 +373,8 @@ function increaseLabelDelay() {
     brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
     brace_y = timelineHeight + 50;
     brace_xmid = (brace_x1 + brace_x2) / 2;
-    
-    delayed_legend.select("text").text(function() {
+
+    brace_text.text(function() {
         return `Label delay (d=${labelDelay})`;
     });
 
@@ -383,7 +383,11 @@ function increaseLabelDelay() {
         .duration(500)
         .attrTween("d", function() {
             return function(t) {
+                console.log(t);
+                console.log(old_brace_x1);
+                console.log(brace_x1);
                 curr_brace_x1 = old_brace_x1 * (1 - t) + brace_x1 * t;
+                console.log(curr_brace_x1);
                 return makeCurlyBrace(curr_brace_x1, brace_y, brace_x2, brace_y, 25, 0.6);
             }
         });
@@ -391,8 +395,6 @@ function increaseLabelDelay() {
     brace_text.transition()
         .duration(500)
         .attr("x", brace_xmid);
-    
-
 
 }
 
