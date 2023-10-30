@@ -1,11 +1,9 @@
-function fig2() {
-    const defs = d3.select("#fig2-defs");
-    const svg = d3.select("#fig2-svg").attr("stroke", "black")
+function fig3() {
+    const defs = d3.select("#fig3-defs");
+    const svg = d3.select("#fig3-svg").attr("stroke", "black")
     const baseY = 10;
     const labelGap = 100;
-    let keywords = ["1 day", "2 days", "3 days", "5 days", "7 days"]
-
-
+    let keywords = ["NVDA", "AMD", "TSLA", "AAPL", "MSFT", "AMZN", "GOOG", "FB", "NFLX", "INTC", "CSCO", "PYPL", "ADBE"];
     function getRandomImage(randomKeyword) {
         return `https://source.unsplash.com/random?${randomKeyword}`;
     }
@@ -57,8 +55,9 @@ function fig2() {
             img.src = imageUrl;
         });
     }
-    
+
     const streamFigSize = 110;
+    
     // Define background rectangle for the image
     const annotImageBG = svg.append("rect")
         .attr('x', svg.attr("width") - streamFigSize)
@@ -67,7 +66,6 @@ function fig2() {
         .attr('height', svg.attr("height"))
         .attr('fill', 'white')
         .attr('stroke', 'white');
-
     const cloudImage = svg.append("image")
         .attr('xlink:href', 'bare-cloud.png')
         .attr('x', svg.attr("width") - streamFigSize)
@@ -78,14 +76,13 @@ function fig2() {
 
 
     const annotImage = svg.append("image")
-        .attr('xlink:href', 'doctor.png')
+        .attr('xlink:href', 'business.png')
         .attr('x', svg.attr("width") - streamFigSize)
         .attr('y', baseY + labelGap)
         .attr('width', streamFigSize)
         .attr('height', streamFigSize);
 
 
-    
 
 
 
@@ -95,9 +92,9 @@ function fig2() {
     const timelineY = (labelY - baseY) / 2 + 50;
     const spacing = 10;
     const shiftAmount = rectSize + spacing;
-    const shiftDuration = 2000;
+    const shiftDuration = 600;
 
-    let labelDelay = 4;
+    let labelDelay = 6;
 
     let rectID = 0;
     const matrix = d3.select("#matrix");
@@ -121,10 +118,10 @@ function fig2() {
 
                 if (currentStrides >= labelDelay + 2) {
                     g.select(".image-sample").classed("grayscale", false);
-                    g.select(".label-group").transition().duration(1000)
+                    g.select(".label-group").transition().duration(600)
                         .attr("transform", `translate(0, ${-labelGap + 10})`);
                     g.select(".label-text").transition().duration(1000).style("opacity", 1);
-                    g.select("rect").transition().duration(1000).style("fill", "#ffb55a");
+                    g.select("rect").transition().duration(1000).style("fill", "#7eb0d5");
                 }
 
                 return `translate(${currentX}, 0)`;
@@ -195,7 +192,7 @@ function fig2() {
                 .attr("ry", 10)
                 .text(imageUrl)
                 .attr("stroke-width", "2px")
-                .style("fill", "#ffb55a");
+                .style("fill", "#7eb0d5");
         
             labelText = labelgroup.append("text")
                 .attr("class", "label-text")
@@ -259,24 +256,27 @@ function fig2() {
         .attr("stroke-width",2)  
         .attr("marker-end","url(#arrow)");  
 
-    delayed_legend = timeline.append("g")
+
+        
+        
+        delayed_legend = timeline.append("g")
         .attr("class", "delayed-legend")
         .attr("transform", "translate(0, 0)");
-
-    // Draw curly brace for the label delay
-    // brace_x1 = 470;
-    // brace_x2 = 780;
-    brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-    brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
-    brace_y = labelY + 50;
-    brace_xmid = (brace_x1 + brace_x2) / 2;
-    brace = delayed_legend.append("path")
+        
+        // Draw curly brace for the label delay
+        // brace_x1 = 470;
+        // brace_x2 = 780;
+        brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
+        brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+        brace_y = labelY + 50;
+        brace_xmid = (brace_x1 + brace_x2) / 2;
+        brace = delayed_legend.append("path")
         .attr("d", makeCurlyBrace(brace_x1, brace_y, brace_x2, brace_y, 25, 0.6))
         .attr("stroke", "black")
         .attr("stroke-width", 2)
         .attr("fill", "none")
-
-    brace_text = delayed_legend.append("text")
+        
+        brace_text = delayed_legend.append("text")
         .attr("x", brace_xmid)
         .attr("y", labelY + 100)
         .attr("text-anchor", "middle")
@@ -284,19 +284,18 @@ function fig2() {
         .style("font-size", "20px")
         // make the label delay text dependent on the label delay
         // .text(function() {
-        //     return `Label delay (d=${labelDelay})`;
-        // });
-        .text(`Label delay (d=${labelDelay})`);
-    
-
+            //     return `Label delay (d=${labelDelay})`;
+            // });
+            .text(`Label delay (d=${labelDelay})`);
+            
+            
         svg.append("text")
             .attr("x", 10)
             .attr("y", svg.attr("height") - 30)
             .attr("text-anchor", "start")
             .attr("dominant-baseline", "middle")
             .style("font-size", "45px")
-            .text("Recovery time");
-
-}
-
-fig2();
+            .text("Stocks");
+            
+    }
+fig3();

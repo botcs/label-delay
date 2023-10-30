@@ -1,15 +1,28 @@
-function fig2() {
-    const defs = d3.select("#fig2-defs");
-    const svg = d3.select("#fig2-svg").attr("stroke", "black")
+function fig4() {
     const baseY = 10;
+    const rectSize = 50;
     const labelGap = 100;
-    let keywords = ["1 day", "2 days", "3 days", "5 days", "7 days"]
+    const labelY = baseY + rectSize + labelGap;
+    const timelineY = (labelY - baseY) / 2 + 50;
+    const spacing = 10;
+    const shiftAmount = rectSize + spacing;
+    const shiftDuration = 1100;
+    
+    let labelDelay = 2;
+    
+    let rectID = 0;
+    const matrix = d3.select("#matrix");
+    const streamFigSize = 110;
+
+    const defs = d3.select("#fig4-defs");
+    const svg = d3.select("#fig4-svg").attr("stroke", "black")
+    let keywords = ["Fair", "Copy", "Suit", "Infr", "Ties", "Pact", "User"];
 
 
     function getRandomImage(randomKeyword) {
         return `https://source.unsplash.com/random?${randomKeyword}`;
     }
-
+    
     function makeCurlyBrace(x1,y1,x2,y2,w,q){
         //Calculate unit vector
         var dx = x1-x2;
@@ -49,22 +62,22 @@ function fig2() {
                 };
                 resolve(size);
             };
-
+            
             img.onerror = function() {
                 reject(new Error('Failed to load image.'));
             };
-
+            
             img.src = imageUrl;
         });
     }
     
-    const streamFigSize = 110;
+    
     // Define background rectangle for the image
     const annotImageBG = svg.append("rect")
         .attr('x', svg.attr("width") - streamFigSize)
         .attr('y', 0)
         .attr('width', streamFigSize)
-        .attr('height', svg.attr("height"))
+        .attr('height', labelY + 20)
         .attr('fill', 'white')
         .attr('stroke', 'white');
 
@@ -78,29 +91,16 @@ function fig2() {
 
 
     const annotImage = svg.append("image")
-        .attr('xlink:href', 'doctor.png')
+        .attr('xlink:href', 'jury.png')
         .attr('x', svg.attr("width") - streamFigSize)
         .attr('y', baseY + labelGap)
         .attr('width', streamFigSize)
         .attr('height', streamFigSize);
 
 
-    
 
 
 
-
-    const rectSize = 50;
-    const labelY = baseY + rectSize + labelGap;
-    const timelineY = (labelY - baseY) / 2 + 50;
-    const spacing = 10;
-    const shiftAmount = rectSize + spacing;
-    const shiftDuration = 2000;
-
-    let labelDelay = 4;
-
-    let rectID = 0;
-    const matrix = d3.select("#matrix");
 
     function addRectangle() {
         let randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
@@ -124,7 +124,7 @@ function fig2() {
                     g.select(".label-group").transition().duration(1000)
                         .attr("transform", `translate(0, ${-labelGap + 10})`);
                     g.select(".label-text").transition().duration(1000).style("opacity", 1);
-                    g.select("rect").transition().duration(1000).style("fill", "#ffb55a");
+                    g.select("rect").transition().duration(1000).style("fill", "#bd7ebe");
                 }
 
                 return `translate(${currentX}, 0)`;
@@ -195,7 +195,7 @@ function fig2() {
                 .attr("ry", 10)
                 .text(imageUrl)
                 .attr("stroke-width", "2px")
-                .style("fill", "#ffb55a");
+                .style("fill", "#bd7ebe");
         
             labelText = labelgroup.append("text")
                 .attr("class", "label-text")
@@ -287,16 +287,16 @@ function fig2() {
         //     return `Label delay (d=${labelDelay})`;
         // });
         .text(`Label delay (d=${labelDelay})`);
-    
 
-        svg.append("text")
-            .attr("x", 10)
-            .attr("y", svg.attr("height") - 30)
-            .attr("text-anchor", "start")
-            .attr("dominant-baseline", "middle")
-            .style("font-size", "45px")
-            .text("Recovery time");
+    
+    svg.append("text")
+        .attr("x", 10)
+        .attr("y", svg.attr("height") - 30)
+        .attr("text-anchor", "start")
+        .attr("dominant-baseline", "middle")
+        .style("font-size", "45px")
+        .text("Copyright claims");
 
 }
 
-fig2();
+fig4();

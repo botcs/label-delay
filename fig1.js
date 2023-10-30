@@ -1,3 +1,6 @@
+
+function fig1() {
+
 let defs = d3.select("#defs");
 let svg = d3.select("#fig1-svg").attr("stroke", "black")
 let baseY = 100;
@@ -393,33 +396,37 @@ function increaseLabelDelay() {
 
 }
 
-delayed_legend.append("rect")
-    .attr("class", "button-rect")
-    .attr("x", 25)
-    .attr("y", 25)
-    .attr("width", rectSize * 2)
-    .attr("height", 50)
-    .attr("rx", 10)
-    .attr("ry", 10)
-    .on("click", increaseLabelDelay);
+ 
+    delayed_legend.append("rect")
+        .attr("class", "button-rect")
+        .attr("x", 25)
+        .attr("y", 25)
+        .attr("width", rectSize * 2)
+        .attr("height", 50)
+        .attr("rx", 10)
+        .attr("ry", 10)
+        .on("click", increaseLabelDelay);
 
-delayed_legend.append("text")
-    .attr("class", "button-text")
-    .attr("x", 25 + rectSize)
-    .attr("y", 25 + 25)
-    .attr("text-anchor", "middle")
-    .attr("dominant-baseline", "middle")
-    .style("font-size", "20px")
-    .text("Change label delay");
+    delayed_legend.append("text")
+        .attr("class", "button-text")
+        .attr("x", 25 + rectSize)
+        .attr("y", 25 + 25)
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .style("font-size", "20px")
+        .text("Change label delay");
 
 
 
-// make all delayed legend elements invisible
-delayed_legend.selectAll("*")
-    .style("opacity", 0)
-    .transition()
-    .duration(5000)
-    .style("opacity", 0)
-    .transition()
-    .duration(5000)
-    .style("opacity", 1);
+    // make all delayed legend elements invisible
+    delayed_legend.selectAll("*")
+        .style("opacity", 0)
+        .transition()
+        .duration(5000)
+        .style("opacity", 0)
+        .transition()
+        .duration(5000)
+        .style("opacity", 1);
+}
+
+fig1();

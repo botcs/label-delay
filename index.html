@@ -59,13 +59,24 @@
             /* margin: 0 auto; */
             max-width: 1000px;
             /* padding: 30px; */
-            text-align: justify;
-
+            text-align: center;
         }
-
+        .bottom-dashed-border {
+           border-bottom: 2px dashed #000;  /* 2px width, dashed style, and black color */
+        }
+        .top-dashed-border {
+           border-top: 2px dashed #000;  /* 2px width, dashed style, and black color */
+        }
         body {
             font-family: 'EB Garamond', serif;
             font-size: 22px;
+            text-align: justify;
+        }
+
+        section {
+            margin: 0 auto;
+            max-width: 1000px;
+            padding-top: 100px;
             text-align: justify;
         }
 
@@ -101,13 +112,21 @@
                         </marker>
                     </defs>
                 </svg>
+                <div style="text-align:justify; margin-top:20px">
                 Our proposed Continual Learning setting considering <b>Label Delay</b> allows us to model a wide range of real-world applications where new raw data is revealed significantly sooner by the data stream $\mathcal{S}_{\mathcal{X}}$ than the annotation process $\mathcal{S}_{\mathcal{Y}}$ can provide the corresponding labels. The main objective is to maximize the accuracy on the newest <b>Eval</b> data using both the samples that have already received their label (in colour) and the more recent samples that are yet to be labeled (in gray).
+                </div>
                 <!-- The goal is to learn a model that can perform well on a sequence of tasks, where the labels for each task are delayed by a fixed number of steps. We propose a simple yet effective approach to model label delay, which we call <b>Delayed Labels</b>. We show that our approach can be used to model a wide range of label delay distributions, and that it can be easily integrated into existing continual learning methods. We evaluate our approach on a variety of continual learning benchmarks, and show that it consistently outperforms existing methods. -->
             </div>
             
-
-            <!-- <div id="fig2" class="fig">
-                <svg width="700" height="300" id="fig2-svg">
+            <section>
+                <h2 style="text-align:left;">Where does label delay come from?</h2>
+                In many real world scenario the time when we need to make predictions the feedback can be delayed due to the inherent nature of the task.
+                Consider the following three examples:
+                In medical applications, the predicted post-operation recovery time of the patient is one of the most important metrics, yet the official recovery time is only established during follow-up visits.
+                In investment banking, the time it takes to receive the results of a trade can be significantly longer than the time it takes to execute the trade itself.
+                In the world of copyright claims, an automated trigger mechanism can prevent fraudulent usage of the content sharing platform, however the actual evaluation of each case by the owners is often significantly delayed.
+            <div id="fig2" class="fig" style="text-align:center; margin-top:20px">
+                <svg width="700" height="280" id="fig2-svg">
                     <defs id="fig2-defs">
                         <filter id="grayscale">
                             <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
@@ -125,13 +144,73 @@
                         </marker>
                     </defs>
                 </svg>
-            </div> -->
+            </div>
+            <div id="fig3" class="fig">
+                <svg width="700" height="280" id="fig3-svg">
+                    <defs id="fig3-defs">
+                        <filter id="grayscale">
+                            <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
+                        </filter>
+                        <marker
+                            id="arrow"
+                            markerUnits="strokeWidth"
+                            markerWidth="12"
+                            markerHeight="12"
+                            viewBox="0 0 12 12"
+                            refX="6"
+                            refY="6"
+                            orient="auto">
+                            <path d="M2,2 L10,6 L2,10 L6,6 L2,2" style="fill: rgb(0, 0, 0);"></path>
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+            <div id="fig4" class="fig">
+                <svg width="700" height="280" id="fig4-svg">
+                    <defs id="fig4-defs">
+                        <filter id="grayscale">
+                            <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
+                        </filter>
+                        <marker
+                            id="arrow"
+                            markerUnits="strokeWidth"
+                            markerWidth="12"
+                            markerHeight="12"
+                            viewBox="0 0 12 12"
+                            refX="6"
+                            refY="6"
+                            orient="auto">
+                            <path d="M2,2 L10,6 L2,10 L6,6 L2,2" style="fill: rgb(0, 0, 0);"></path>
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+            As one can see in the above examples, although the label delay is present across different applications the root cause stems from entirely different sources.
+            While the real world applications are heavily impacted by the phenomenon, the diversity of the various scenarios makes it difficult to find common patterns that can be used to address the problem of label delay.
+            A few challenges that arise when trying to model label delay are:
+            <ul style="margin-left:40px; font-size:20px">
+                <li>The data distribution is evolving over time</li>
+                <li>The delay factor cannot be influenced for analysis</li>
+                <li>The delay impacts the model in unknown ways</li>
+            </ul>
+            </section>
+            <section>
+                <h2 style="text-align:left;">Our proposal</h2>
+                <div style="text-align:justify; margin-top:20px">
+                We propose a new Continual Learning setting, in which we show how does label delay impact the learning process.
+                We consider the naive solution of ignoring the most recently collected data and only using the samples that have already received their label and compare it to the ideal case where the labels are immediately available for all samples.
+                We provide an extensive list of experiments of trying to recover the performance of the ideal case by using the samples before their corresponding labels become available.
+                </div>
+            </section>
         </center>
     </div>
 
     <script src="fig1.js"></script>
-    <!-- <script src="fig2.js"></script>
-    <script src="fig3.js"></script> -->
+    <script src="fig2.js"></script>
+    <script src="fig3.js"></script>
+    <script src="fig4.js"></script>
+    <!-- <script src="fig3.js"></script> -->
+
 
 
 </body>
