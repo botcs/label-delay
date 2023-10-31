@@ -58,7 +58,7 @@
         .fig{
             /* margin: 0 auto; */
             max-width: 1000px;
-            /* padding: 30px; */
+            /* padding-top: 30px; */
             text-align: center;
         }
         .bottom-dashed-border {
@@ -76,7 +76,7 @@
         section {
             margin: 0 auto;
             max-width: 1000px;
-            padding-top: 100px;
+            padding-top: 20px;
             text-align: justify;
         }
 
@@ -185,10 +185,10 @@
                     </defs>
                 </svg>
             </div>
-            As one can see in the above examples, although the label delay is present across different applications the root cause stems from entirely different sources.
+            As one can see in the above examples, although the emergent problem of label delay is present across different applications the root cause stems from entirely different sources.
             While the real world applications are heavily impacted by the phenomenon, the diversity of the various scenarios makes it difficult to find common patterns that can be used to address the problem of label delay.
-            A few challenges that arise when trying to model label delay are:
-            <ul style="margin-left:40px; font-size:20px">
+            A few challenges that one might find when trying to model label delays in real-world applications are:
+            <ul style="margin-left:40px">
                 <li>The data distribution is evolving over time</li>
                 <li>The delay factor cannot be influenced for analysis</li>
                 <li>The delay impacts the model in unknown ways</li>
@@ -197,10 +197,55 @@
             <section>
                 <h2 style="text-align:left;">Our proposal</h2>
                 <div style="text-align:justify; margin-top:20px">
-                We propose a new Continual Learning setting, in which we show how does label delay impact the learning process.
-                We consider the naive solution of ignoring the most recently collected data and only using the samples that have already received their label and compare it to the ideal case where the labels are immediately available for all samples.
-                We provide an extensive list of experiments of trying to recover the performance of the ideal case by using the samples before their corresponding labels become available.
+                    We propose a new Continual Learning setting, in which we show how does label delay impact the learning process.
+                    We consider the naïve solution of ignoring the most recently collected data and only using the samples that have already received their label and compare it to the ideal case where the labels are immediately available for all samples.
+                    We provide an extensive list of experiments (amounting to over 25k GPU hours) of trying to recover the performance of the ideal case by using the samples before their corresponding labels become available.
+
+                    <div style="margin-top:20px; width:100%; text-align: center;">
+                        <img src="fig-delay-ablation-CLOC.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;">
+                        <img src="fig-delay-ablation-CGLM.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;">
+                    </div>
+
+                    We use two datasets to evaluate our approach: <b>Continual Localization (CLOC)</b> and <b>Continual Google Landmarks (CGLM)</b>.
+                    As one can see in the above figures, there is a growing gap between the performance of the ideal case and the naïve solution as the delay increases.
+                    More importantly, we show that on different datasets the impact of the delay differs significantly, which highlights the importance of modeling label delay.
                 </div>
+            </section>
+            <section>
+                <h2 style="text-align:left;">How to overcome label delay?</h2>
+                Even though one might not be able to influence the delay factor, we show that it is possible to recover the performance of the ideal case by using the samples before their corresponding labels become available.
+                There are two main challenges that one needs to overcome in order to achieve this:
+                <!-- <ul style="margin-left:40px">
+                    <li>How to use the unlabeled samples to improve the model?</li>
+                    <li>How to keep the solution computationally efficient?</li>
+                </ul> -->
+                1) How to use the unlabeled samples to improve the model?
+                2) How to keep the solution computationally efficient?
+                To address these challenges our experiment allows the continual learning models to use the unlabeled samples, while normalizing the computational cost of the model to be the same as the naïve solution.
+                <div id="fig5" class="fig" style="margin-top:20px; margin-bottom:20px">
+                    <svg width="700" height="400" id="fig5-svg">
+                        <defs id="fig5-defs">
+                            <marker
+                                id="arrow"
+                                markerUnits="strokeWidth"
+                                markerWidth="12"
+                                markerHeight="12"
+                                viewBox="0 0 12 12"
+                                refX="6"
+                                refY="6"
+                                orient="auto">
+                                <path d="M2,2 L10,6 L2,10 L6,6 L2,2" style="fill: rgb(0, 0, 0);"></path>
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+                This allows us to compare the performance of various methods that extend the naïve solution to use the unlabeled samples.
+                Under such a setting, we can use the naïve solution as the lower bound and the ideal case as the upper bound, while keeping the computational cost $\mathcal{C}$ of the model the same.
+                In our work, we compare the performance of various families of methods, such as Test-Time Adaptation (TTA) and Self-Supervised Learning (SSL) and propose a new, more efficient approach fine-tailored to the problem of label delay.
+
+            <div style="margin-top:20px; width:100%; text-align: center;">
+                <img src="fig-unsupervised.svg" style="width:85%; margin-top:20px; display: inline-block; vertical-align: middle; horizontal-align: middle;">
+            </div>
             </section>
         </center>
     </div>
@@ -209,7 +254,8 @@
     <script src="fig2.js"></script>
     <script src="fig3.js"></script>
     <script src="fig4.js"></script>
-    <!-- <script src="fig3.js"></script> -->
+    <script src="fig5.js"></script>
+
 
 
 
