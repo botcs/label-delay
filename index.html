@@ -120,7 +120,7 @@
             
             <section>
                 <h2 style="text-align:left;">Where does label delay come from?</h2>
-                In many real world scenario the time when we need to make predictions the feedback can be delayed due to the inherent nature of the task.
+                In many real world scenario, the time between making predictions and the feedback can be vastly different due to the inherent nature of the task.
                 Consider the following three examples:
                 In medical applications, the predicted post-operation recovery time of the patient is one of the most important metrics, yet the official recovery time is only established during follow-up visits.
                 In investment banking, the time it takes to receive the results of a trade can be significantly longer than the time it takes to execute the trade itself.
@@ -185,7 +185,7 @@
                     </defs>
                 </svg>
             </div>
-            As one can see in the above examples, although the emergent problem of label delay is present across different applications the root cause stems from entirely different sources.
+            As one can see in the above examples, although the emergent problem of label delay is present across different applications, the root cause stems from entirely different sources.
             While the real world applications are heavily impacted by the phenomenon, the diversity of the various scenarios makes it difficult to find common patterns that can be used to address the problem of label delay.
             A few challenges that one might find when trying to model label delays in real-world applications are:
             <ul style="margin-left:40px">
@@ -206,7 +206,7 @@
                         <img src="fig-delay-ablation-CGLM.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;">
                     </div>
 
-                    We use two datasets to evaluate our approach: <b>Continual Localization (CLOC)</b> and <b>Continual Google Landmarks (CGLM)</b>.
+                    We use two large-scale datasets to evaluate our approach: <b>Continual Localization (CLOC - 40M samples)</b> and <b>Continual Google Landmarks (CGLM - 0.5M samples)</b>.
                     As one can see in the above figures, there is a growing gap between the performance of the ideal case and the naïve solution as the delay increases.
                     More importantly, we show that on different datasets the impact of the delay differs significantly, which highlights the importance of modeling label delay.
                 </div>
@@ -219,8 +219,8 @@
                     <li>How to use the unlabeled samples to improve the model?</li>
                     <li>How to keep the solution computationally efficient?</li>
                 </ul> -->
-                1) How to use the unlabeled samples to improve the model?
-                2) How to keep the solution computationally efficient?
+                1) using the unlabeled samples to improve the model
+                2) keeping the solution computationally efficient
                 To address these challenges our experiment allows the continual learning models to use the unlabeled samples, while normalizing the computational cost of the model to be the same as the naïve solution.
                 <div id="fig5" class="fig" style="margin-top:20px; margin-bottom:20px">
                     <svg width="700" height="400" id="fig5-svg">
