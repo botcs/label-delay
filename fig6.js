@@ -9,17 +9,12 @@ function fig6() {
     const shiftAmount = rectSize + spacing;
 
     let shiftDuration = 1000;
-    let labelDelay = 3;
+    let labelDelay = 5;
     let streamRate = 1;
     
     let rectID = 0;
     const streamFigSize = 110;
-    let keywords = ["1 day", "2 days", "3 days", "5 days", "7 days"];
 
-
-    function getRandomImage(randomKeyword) {
-        return `https://source.unsplash.com/random?${randomKeyword}`;
-    }
     
     function makeCurlyBrace(x1,y1,x2,y2,w,q){
         //Calculate unit vector
@@ -110,8 +105,6 @@ function fig6() {
 
 
     function addRectangle() {
-        let randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
-        let imageUrl = getRandomImage(randomKeyword);
 
         svg.selectAll(".sample-group")
             .transition()
@@ -210,20 +203,8 @@ function fig6() {
                     .attr("height", 20)
                     .attr("rx", 10)
                     .attr("ry", 10)
-                    .text(imageUrl)
                     .attr("stroke-width", "2px")
                     .style("fill", "#ffb55a");
-            
-                labelText = labelgroup.append("text")
-                    .attr("class", "label-text")
-                    .attr("x", rectSize / 2)
-                    .attr("y", baseY + rectSize + labelGap + 11)
-                    .attr("text-anchor", "middle")
-                    .attr("dominant-baseline", "middle")
-                    .style("font-size", "17px")
-                    .text(randomKeyword)
-                    .style("opacity", 0)
-                    .style("font-weight", "light");
         }
 
 
@@ -294,7 +275,7 @@ function fig6() {
 
     brace_text = delayed_legend.append("text")
         .attr("x", brace_xmid)
-        .attr("y", labelY + 100)
+        .attr("y", labelY + 70)
         .attr("text-anchor", "middle")
         .attr("dominant-baseline", "middle")
         .style("font-size", "20px")
@@ -302,7 +283,7 @@ function fig6() {
         // .text(function() {
         //     return `Label delay (d=${labelDelay})`;
         // });
-        .text(`Unsupervised data`);
+        .text(`d=${labelDelay}`);
     // Show two sliders, one for the label delay
     // and one for the rate of the annotation stream (data:annot which is always N:1)
     // if more data pours in than we can annotate, we will have to leave some data unannotated
@@ -317,7 +298,7 @@ function fig6() {
         brace_xmid = (brace_x1 + brace_x2) / 2;
 
         brace_text.text(function() {
-            return `Label delay (d=${labelDelay})`;
+            return `d=${labelDelay}`;
         });
 
         // make smooth transition
@@ -325,9 +306,6 @@ function fig6() {
             .duration(500)
             .attrTween("d", function() {
                 return function(t) {
-                    console.log(t);
-                    console.log(old_brace_x1);
-                    console.log(brace_x1);
                     curr_brace_x1 = old_brace_x1 * (1 - t) + brace_x1 * t;
                     console.log(curr_brace_x1);
                     return makeCurlyBrace(curr_brace_x1, brace_y, brace_x2, brace_y, 25, 0.6);
@@ -361,7 +339,7 @@ function fig6() {
 
         // Create a scale for the slider with discrete steps
         const scale = d3.scaleLinear()
-            .domain([1, 4]) // The range of discrete values
+            .domain([values[0], values[values.length - 1]])
             .range([0, width])
             .clamp(true);
 
@@ -449,8 +427,8 @@ function fig6() {
 
         handle.call(drag);
     }
-    createSlider("Label delay (d)", 50, 40, 400, [1, 2, 3, 4], labelDelay, changeLabelDelay);
-    createSlider("Stream rate (r)", 50, 120, 400, [1, 2, 3, 4], streamRate, changeStreamRate);
+    createSlider("Label delay (d)", 50, 40, 400, [1, 5], labelDelay, changeLabelDelay);
+    createSlider("Stream rate (r)", 50, 120, 400, [1, 2, 3], streamRate, changeStreamRate);
 
 
 }
