@@ -8,9 +8,9 @@ function fig6() {
     const spacing = 10;
     const shiftAmount = rectSize + spacing;
 
-    let shiftDuration = 1000;
-    let labelDelay = 5;
-    let streamRate = 1;
+    let shiftDuration = 800;
+    let labelDelay = 1;
+    let streamRate = 3;
     
     let rectID = 0;
     const streamFigSize = 110;
