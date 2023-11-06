@@ -200,7 +200,7 @@ function fig3() {
                 .attr("y", baseY + rectSize + labelGap + 11)
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
-                .style("font-size", "17px")
+                .style("font-size", "15px")
                 .text(randomKeyword)
                 .style("opacity", 0)
                 .style("font-weight", "light");
