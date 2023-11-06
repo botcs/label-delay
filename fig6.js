@@ -12,7 +12,7 @@ function fig6() {
     let shiftDurationSpeedup = 50;
     let labelDelay = 4;
     let streamRate = 5;
-    let numWorkers = 2;
+    let annotRate = 2;
     let shiftDuration = baseShiftDuration - shiftDurationSpeedup * streamRate;
     
     let rectID = 0;
@@ -100,7 +100,7 @@ function fig6() {
         .attr("text-anchor", "middle")
         // .attr("dominant-baseline", "middle")
         .style("font-size", "20px")
-        .text(`r = ${streamRate}:${numWorkers}`);
+        .text(`r = ${streamRate}:${annotRate}`);
 
 
 
@@ -156,8 +156,10 @@ function fig6() {
             .attr("ry", 15);
 
         // Create a group
-        let workerID = rectID % streamRate;
-        isAnnotated = workerID <= numWorkers - 1;
+        // let workerID = rectID % streamRate;
+        // isAnnotated = workerID <= annotRate - 1;
+        isAnnotated = rectID % streamRate <= annotRate - 1;
+        workerID = rectID % Math.max(streamRate, labelDelay);
         const group = svg.append("g")
             .attr("class", "sample-group")
             .attr("sampleID", rectID)
@@ -336,15 +338,15 @@ function fig6() {
         shiftDuration = baseShiftDuration - shiftDurationSpeedup * streamRate;
         clearInterval(intervalId);
         intervalId = setInterval(addRectangle, shiftDuration);
-        rateText.text(`r = ${streamRate}:${numWorkers}`)
+        rateText.text(`r = ${streamRate}:${annotRate}`)
             .transition()
             .duration(500);
     }
 
 
     function changeAnnotRate(newAnnotRate) {
-        numWorkers = newAnnotRate;
-        rateText.text(`r = ${streamRate}:${numWorkers}`)
+        annotRate = newAnnotRate;
+        rateText.text(`r = ${streamRate}:${annotRate}`)
             .transition()
             .duration(500);
     }
@@ -446,12 +448,12 @@ function fig6() {
             });
 
         handle.call(drag);
+        return slider;
     }
     // createSlider("Label delay (d)", 50, 40, 400, [1, 5], labelDelay, changeLabelDelay);
 
-    createSlider("Data collection rate", 50, 40, 500, [1, 2, 3, 4, 5], streamRate, changeStreamRate);
-    createSlider("Annotation rate", 50, 120, 250, [1, 2, 3], numWorkers, changeAnnotRate);
-
+    dataSlider = createSlider("Data collection rate", 50, 40, 500, [1, 2, 3, 4, 5], streamRate, changeStreamRate);
+    annotSlider = createSlider("Annotation rate", 50, 120, 250, [1, 2, 3], annotRate, changeAnnotRate);
 
 }
 

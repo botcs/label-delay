@@ -275,12 +275,14 @@
             
             In the figure above, we implement the simplest possible strategy, where the samples are labeled in the order they are collected.
             We denote each annotator with their corresponding ID, therefore $\#1,\#2,\#3,...$ are the first, second, third annotators, respectively.
-            In this example each annotator is delayed by $d=4$ steps, and can only start labeling the next samples once they have finished labeling their assigned ones.
-
+            In this example each annotator takes $d=4$ steps, and can only start labeling the next samples once they have finished labeling their assigned ones.
+            If the ratio between the rate of data collection and the rate of label assignment is $r=1$, then after $d$ steps every sample will have received its label.
+            However, if the ratio is $r>1$, then it means that the annotators cannot keep up with the rate of data collection and some samples will remain unlabeled indefinitely.
+            In this case, the choice of which samples are labeled and which are not is a strategic decision that can have a significant impact on the performance of the model.
             <h3>How to interact with the figure:</h3>
             <ul style="margin-left:40px">
-                <li><b>Label delay:</b> controls the number of steps between the collection of a sample and the assignment of its label</li>
-                <li><b>Stream rate:</b> controls the ratio between the rate of data collection and the rate of label assignment</li>
+                <li><b>Data collection rate:</b> controls how fast samples are revealed by the stream</li>
+                <li><b>Annotation rate:</b> controls the annotation throughput</li>
             </section>
         </center>
     </div>
