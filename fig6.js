@@ -8,9 +8,12 @@ function fig6() {
     const spacing = 10;
     const shiftAmount = rectSize + spacing;
 
-    let shiftDuration = 800;
-    let labelDelay = 1;
-    let streamRate = 3;
+    let baseShiftDuration = 1000;
+    let shiftDurationSpeedup = 50;
+    let labelDelay = 4;
+    let streamRate = 5;
+    let numWorkers = 2;
+    let shiftDuration = baseShiftDuration - shiftDurationSpeedup * streamRate;
     
     let rectID = 0;
     const streamFigSize = 110;
@@ -97,7 +100,7 @@ function fig6() {
         .attr("text-anchor", "middle")
         // .attr("dominant-baseline", "middle")
         .style("font-size", "20px")
-        .text("r = 1:1");
+        .text(`r = ${streamRate}:${numWorkers}`);
 
 
 
@@ -127,7 +130,7 @@ function fig6() {
                         g.select(".image-sample").classed("grayscale", false);
                         g.select(".label-group").transition().duration(transitionTime)
                             .attr("transform", `translate(0, ${-labelGap + 10})`);
-                        g.select(".label-text").transition().duration(transitionTime).style("opacity", 1);
+                        g.select(".label-text").transition().duration(transitionTime).style("opacity", 0);
                         g.select("rect").transition().duration(transitionTime).style("fill", "#ffb55a");
                     }
                 }
@@ -153,7 +156,8 @@ function fig6() {
             .attr("ry", 15);
 
         // Create a group
-        isAnnotated = rectID % streamRate == 0;
+        let workerID = rectID % streamRate;
+        isAnnotated = workerID <= numWorkers - 1;
         const group = svg.append("g")
             .attr("class", "sample-group")
             .attr("sampleID", rectID)
@@ -205,6 +209,15 @@ function fig6() {
                     .attr("ry", 10)
                     .attr("stroke-width", "2px")
                     .style("fill", "#ffb55a");
+                
+                labelText = labelgroup.append("text")
+                    .attr("class", "label-text")
+                    .attr("x", rectSize / 2)
+                    .attr("y", baseY + rectSize + labelGap + 10)
+                    .attr("text-anchor", "middle")
+                    .attr("dominant-baseline", "middle")
+                    .style("font-size", "18px")
+                    .text(`#${workerID+1}`);
         }
 
 
@@ -320,13 +333,20 @@ function fig6() {
 
     function changeStreamRate(newStreamRate) {
         streamRate = newStreamRate;
-        shiftDuration = 1000 - 100 * streamRate;
+        shiftDuration = baseShiftDuration - shiftDurationSpeedup * streamRate;
         clearInterval(intervalId);
         intervalId = setInterval(addRectangle, shiftDuration);
-        rateText.text(`r = ${streamRate}:1`)
+        rateText.text(`r = ${streamRate}:${numWorkers}`)
             .transition()
             .duration(500);
+    }
 
+
+    function changeAnnotRate(newAnnotRate) {
+        numWorkers = newAnnotRate;
+        rateText.text(`r = ${streamRate}:${numWorkers}`)
+            .transition()
+            .duration(500);
     }
 
     function createSlider(title, startX, startY, width, values, defaultValue, callback) {
@@ -413,7 +433,7 @@ function fig6() {
             .style('fill', '#fff')
             .style('cursor', 'pointer')
             .style('stroke', '#000')
-            .style('stroke-width', '2.5px');
+            .style('stroke-width', '3px');
 
         // Drag behavior for D3.js version 5
         const drag = d3.drag()
@@ -427,8 +447,10 @@ function fig6() {
 
         handle.call(drag);
     }
-    createSlider("Label delay (d)", 50, 40, 400, [1, 5], labelDelay, changeLabelDelay);
-    createSlider("Stream rate (r)", 50, 120, 400, [1, 2, 3], streamRate, changeStreamRate);
+    // createSlider("Label delay (d)", 50, 40, 400, [1, 5], labelDelay, changeLabelDelay);
+
+    createSlider("Data collection rate", 50, 40, 500, [1, 2, 3, 4, 5], streamRate, changeStreamRate);
+    createSlider("Annotation rate", 50, 120, 250, [1, 2, 3], numWorkers, changeAnnotRate);
 
 
 }

@@ -251,12 +251,12 @@
             <section>
                 <h2 style="text-align:left;">Future work</h2>
                 In this project, we have demonstrated the versatility of our proposed setting in modeling various label delay scenarios. 
-                A key presumption in our methodology is that the rate at which data is collected is <i>identical</i> to the rate at which labels are assigned. However, this assumption doesn't always hold true in practical situations. By allowing the rates of data collection and label assignment to be modeled independently, our method could be adapted for a broader array of applications where these two rates are not necessarily linked. 
+                A key presumption in our methodology is that the rate at which data is collected is <i>identical</i> to the rate at which labels are assigned. However, this assumption doesn't always hold true in practical situations. By allowing the rates of data collection and label assignment to be modeled independently, our method could be adapted for a broader array of applications where these two rates are not identical. 
                 Although our current model anticipates that each data sample will be assigned a label after a specific number of steps (exactly $d$ steps), this may not be feasible in real-world conditions where data accumulates faster than labels can be assigned, potentially leaving some samples unlabeled indefinitely.
                 In such cases, the choice which samples are labeled and which are not is not arbitrary, but rather a strategic decision that can have a significant impact on the performance of the model.
                 This is especially true in the case of continual learning, where the model is expected to perform well on the most recent data.
                 <div id="fig6" class="fig" style="margin-top:20px; margin-bottom:20px">
-                    <svg width="700" height="420" id="fig6-svg">
+                    <svg width="1000" height="420" id="fig6-svg">
                         <defs id="fig6-defs">
                             <marker
                                 id="arrow"
@@ -274,8 +274,9 @@
                 </div>
             
             In the figure above, we implement the simplest possible strategy, where the samples are labeled in the order they are collected.
-            When the ratio between the rate of data collection and the rate of label assignment is higher than 1, only every $N$-th sample is labeled, where $N:1$ is the ratio between the two rates, respectively.
-            <br>
+            We denote each annotator with their corresponding ID, therefore $\#1,\#2,\#3,...$ are the first, second, third annotators, respectively.
+            In this example each annotator is delayed by $d=4$ steps, and can only start labeling the next samples once they have finished labeling their assigned ones.
+
             <h3>How to interact with the figure:</h3>
             <ul style="margin-left:40px">
                 <li><b>Label delay:</b> controls the number of steps between the collection of a sample and the assignment of its label</li>
