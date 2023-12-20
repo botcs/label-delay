@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modeling Label Delay in Continual Learning</title>
+    <title>Label Delay in Continual Learning</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond&display=swap" rel="stylesheet">
@@ -57,9 +57,12 @@
 
         .fig{
             /* margin: 0 auto; */
-            max-width: 1000px;
+            /* max-width: 1000px; */
             /* padding-top: 30px; */
-            text-align: center;
+            /* text-align: center; */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         .bottom-dashed-border {
            border-bottom: 2px dashed #000;  /* 2px width, dashed style, and black color */
@@ -103,12 +106,19 @@
 <body>
     <div id="primary-content">
         <center>
-            <h1>Modeling Label Delay in Continual Learning</h1>
-            <h4>Botos Csaba<sup>12</sup>*,  Wenxuan Zhang,<sup>3</sup>*, Matthias Müller<sup>2</sup>, Ser-Nam Lim<sup>4</sup>,  Mohamed Elhoseiny<sup>3</sup>,  Philip Torr<sup>1</sup>,  Adel Bibi<sup>1</sup></h4>
+            <h1>Label Delay in Continual Learning</h1>
+            <h4>
+                <a href="https://botcs.github.io/academic/">Botos Csaba</a><sup>12</sup>*,  
+                <a href="https://cemse.kaust.edu.sa/vcc/people/person/wenxuan-zhang">Wenxuan Zhang</a><sup>3</sup>*, 
+                <a href="https://matthias.pw/">Matthias Müller</a><sup>2</sup>, 
+                <a href="https://sites.google.com/site/sernam">Ser-Nam Lim</a><sup>4</sup>,  
+                <a href="https://cemse.kaust.edu.sa/vcc/people/person/mohamed-elhoseiny">Mohamed Elhoseiny</a><sup>3</sup>,  
+                <a href="https://www.robots.ox.ac.uk/~phst/">Philip Torr</a><sup>1</sup>,  
+                <a href="https://www.adelbibi.com/">Adel Bibi</a><sup>1</sup></h4>
             <h5><sup>1</sup>University of Oxford, <sup>2</sup>Intel, <sup>3</sup>KAUST, <sup>4</sup>Facebook AI Research, * Equal contribution</h5>
 
             <h5>
-                [<a href="./LABEL_DELAY_IN_CONTINUAL_LEARNING.pdf">Preprint</a>]
+                [<a href="https://arxiv.org/abs/2312.00923">Paper</a>]
                 [<a href="https://github.com/botcs/solo-learn">Code</a> (coming soon)]
             </h5>
             <div id="fig1" class="fig">
