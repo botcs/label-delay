@@ -486,19 +486,47 @@ class DOMHandler {
             y: this.gridY(this.pendingSize)
         };
     }
-
-
     async renderSimilarities() {
-        const scores = await dataHandler.scores.data();
-        const scoresFlat = Array.from(scores).flat();
-        this.similarityGroup.selectAll("circle")
-            .data(scores)
-            .join("circle")
-            .attr("cx", (d, i) => this.gridX(i % this.memorySize + 1))
-            .attr("cy", (d, i) => this.gridY(Math.floor(i / this.memorySize)))
-            .attr("r", (d, i) => d * DataCard.unitSize)
-            .attr("fill", "green");
+        const scores = await dataHandler.scores.array();
+        const numRows = scores.length;
+        const numCols = scores[0].length;
+        const maxScores = scores.map(row => d3.max(row)); // Maximum score per row
+    
+        const barPadding = 0.1;
+        const barWidth = DataCard.unitSize * (1 - barPadding);
+        const barHeight = DataCard.unitSize;
+        const barX = (j) => this.gridX(j % numCols + 1) - barWidth / 2;
+        // Adjusted barY to start from the baseline
+        const barY = (d, i) => {
+            let y = this.gridY(Math.floor(i / numCols));
+            y += DataCard.unitSize * 0.5;
+            y -= barHeightScale(d, i);
+            return y;
+        };
+    
+        const maxIndices = scores.map(row => d3.maxIndex(row));
+    
+        function barColor(d, i) {
+            if (i % numCols === maxIndices[Math.floor(i / numCols)]) {
+                return "green";
+            }
+            return "blue";
+        }
+        const barHeightScale = (d, i) => d3.scaleLinear()
+            .domain([0, maxScores[Math.floor(i / numCols)]])
+            .range([0, barHeight])(d);
+    
+        this.similarityGroup.selectAll("rect")
+            .data(scores.flat())
+            .join("rect")
+            .attr("x", (d, i) => barX(i))
+            .attr("y", (d, i) => barY(d, i)) // Updated y attribute
+            .attr("width", barWidth)
+            .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
+            .attr("fill", (d, i) => barColor(d, i));
     }
+    
+    
 
     async addDataCard(dataEntry) {
         // Add card to the pending entries
