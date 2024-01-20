@@ -1,7 +1,11 @@
+const PENDING_SIZE = 3;
+const MEMORY_SIZE = 5;
+const NUM_CLASSES = 3;
+const NUM_FEATURES = 3**2;
+
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('aux-canvas');
 const svg = d3.select("#main")
-
 
 // Define the clipping path
 const clip = svg.append("defs")
@@ -12,17 +16,133 @@ const clip = svg.append("defs")
 
 class DataEntry {
     static count = 0;
-    constructor(inData, outData, label = null) {
+    constructor(inData, outData, label = 1) {
         this.inData = inData; // An image or a video frame
-        this.pred = outData[0]; // A [numClasses] tensor representing the class probabilities
-        this.feat = outData[1]; // A [9] tensor representing the feature vector
+        this.pred = tf.squeeze(outData[0]); // A [NUM_CLASES] tensor representing the class probabilities
+        this.feat = tf.squeeze(outData[1]); // A [NUM_FEATURES] tensor representing the feature vector
+        this.normalizedFeat = this.feat.div(this.feat.norm(2));
         this.label = label; // A string or number representing the label
         this.id = DataEntry.count;
         DataEntry.count++;
     }
+
+    dispose() {
+        this.inData.Tensor.dispose();
+        this.pred.dispose();
+        this.feat.dispose();
+        this.normalizedFeat.dispose();
+    }
 }
 
+class DataHandler {
+    constructor(memorySize = MEMORY_SIZE, pendingSize = PENDING_SIZE) {
+        this.memorySize = memorySize;
+        this.pendingSize = pendingSize;
+
+        this.memoryEntries = [];
+        this.pendingEntries = [];
+
+
+
+        this.similarities = [];
+        for (let i = 0; i < this.pendingSize; i++) {
+            this.similarities.push([]);
+            for (let j = 0; j < this.memorySize; j++) {
+                this.similarities[i].push(0);
+            }
+        }
+    }
+
+    // In this app we only update either rows or lines never the entire matrix
+    async computeSingleSimilarity(queryEntry, keyEntries, expectedLength) {
+        if (keyEntries.length === 0) {
+            return Array(expectedLength).fill(0);
+        }
+
+        const queryFeat = queryEntry.normalizedFeat;
+        let keyFeats = [];
+        for (let i = 0; i < keyEntries.length; i++) {
+            keyFeats.push(keyEntries[i].normalizedFeat);
+        }
+        keyFeats = tf.stack(keyFeats);
+        const sim = tf.dot(keyFeats, queryFeat);
+        const simData = await sim.data();
+        sim.dispose();
+        keyFeats.dispose();
+
+        const ret = Array(expectedLength).fill(0);
+        simData.forEach((s, i) => {
+            ret[i] = s;
+        });
+        return ret;
+    }
+
+    async addDataEntry(dataEntry) {
+        this.pendingEntries.unshift(dataEntry);
+
+        // Add new row to the top and remove bottom row
+        const simPenToMem = await this.computeSingleSimilarity(
+            dataEntry, this.memoryEntries, this.memorySize
+        );
+        this.similarities.unshift(simPenToMem);
+        this.similarities.pop();
+
+        // If the capacity of the pending entries is exceeded
+        if (this.pendingEntries.length > this.pendingSize) {
+            // Remove the oldest pending entry
+            const transitionEntry = this.pendingEntries.pop();
+            
+            // If labeled, add to the memory entries
+            if (transitionEntry.label !== null) {
+                this.memoryEntries.unshift(transitionEntry);
+
+                // Add new column to the left and remove right column
+                const simMemToPen = await this.computeSingleSimilarity(
+                    transitionEntry, this.pendingEntries, this.pendingSize
+                );
+                this.similarities.forEach((row, i) => {
+                    row.unshift(simMemToPen[i]);
+                    row.pop();
+                });
+            } else {
+                transitionEntry.dispose();
+            }
+        }
+
+        // If the capacity of the memory entries is exceeded
+        if (this.memoryEntries.length > this.memorySize) {
+            // Remove the oldest memory entry
+            const oldestEntry = this.memoryEntries.pop();
+            oldestEntry.dispose();
+        }
+
+        console.log(this.similarities);
+    }
+
+    async updateSimilarities(pendingIndex = null, memoryIndex = null) {
+        // Lazy update of the similarities
+        if (pendingIndex !== null) {
+            const simPenToMem = await this.computeSingleSimilarity(
+                this.pendingEntries[pendingIndex], this.memoryEntries
+            );
+            this.similarities[pendingIndex] = simPenToMem;
+        }
+
+        if (memoryIndex !== null) {
+            const simMemToPen = await this.computeSingleSimilarity(
+                this.memoryEntries[memoryIndex], this.pendingEntries
+            );
+            this.similarities.forEach((row, i) => {
+                row[memoryIndex] = simMemToPen[i];
+            });
+        }
+    }
+}
+const dataHandler = new DataHandler();
+
+
 class DataCard {
+    // A datacard is a visual representation of a data entry
     static unitSize = 100;
 
     static layouts = {
@@ -57,8 +177,11 @@ class DataCard {
         this.layout = DataCard.layouts[orientation];
     }
 
-    async createDOM() {
-        const mainGroup = d3.select("#main")
+    async createDOM(parentGroup = null) {
+        if (parentGroup === null) {
+            parentGroup = svg;
+        }
+        const mainGroup = parentGroup
             .append("g");
         
         mainGroup.attr("class", "datacard")
@@ -111,10 +234,10 @@ class DataCard {
             .range([0, DataCard.unitSize])
             .padding(.5);
 
-        const embeddings = await this.dataEntry.feat.data();
+        const feat = await this.dataEntry.feat.data();
         
         featureGroup.selectAll("circle")
-            .data(embeddings)
+            .data(feat)
             .join("circle")
             .attr("cx", (d, i) => pos(i % 3))
             .attr("cy", (d, i) => pos(Math.floor(i / 3)))
@@ -173,12 +296,18 @@ class DataCard {
     }
 
 
-    async changePosition(position) {
-        this.position = position;
+    async changePosition(centerPosition) {
+        // Move the card such that the featureGroup is centered at the position
+        this.position = {
+            x: centerPosition.x - this.layout.feature.x - DataCard.unitSize/2,
+            y: centerPosition.y - this.layout.feature.y - DataCard.unitSize/2
+        }
+        const x = this.position.x;
+        const y = this.position.y;
         await this.mainGroup.transition()
             .duration(500)
             .attr(
-                "transform", `translate(${position.x}, ${position.y})`
+                "transform", `translate(${x}, ${y})`
             )
             .end();
     }
@@ -194,70 +323,118 @@ class DataCard {
 
 }
 
+
 class DOMHandler {
-    constructor(memorySize = 5, pendingSize = 3, width = 700, height = 500) {
+    constructor(
+        memorySize = MEMORY_SIZE, 
+        pendingSize = PENDING_SIZE, 
+        offset = {x:0, y:0},
+        width = 700, 
+        height = 500
+    ) {
         // the memory entries are the labeled datacards
         // the pending entries are the unlabeled datacards
         // the width and height are used for the inner dimensions of table
 
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
-        this.memory_entries = [];
-        this.pending_entries = [];
+        this.memoryCards = [];
+        this.pendingCards = [];
+        this.offset = offset;
         this.width = width;
         this.height = height;
 
         this.setDOMPositions();
+        this.mainGroup = svg.append("g")
+            .attr("id", "DOMHandler")
+            .attr("transform", `translate(${offset.x}, ${offset.y})`);
+        this.mainGroup.append("rect")
+            .attr("fill", "pink")
+            .attr("width", width)
+            .attr("height", height);
+
+        this.similarityGroup = this.mainGroup.append("g")
+            .attr("id", "similarityGroup");
+        this.updateSimilarities();
     }
 
-    setDOMPositions() {
-        // The following are used for the UI
-        
-        // the pending datacards are shown on the vertical axis on the left
-        const pendingX = 0;
+
+    setDOMPositions(padding = 0.0) {
+        // we use a grid layout for the datacards
+        // on the left we have the pending entries 
+        //      (top - newest -> bottom - oldest)
+        // on the bottom we have the labeled entries 
+        //      (left - newest -> right - oldest)
+
+        // in the middle we have the similarity matrix
+        // between the pending entries and the labeled entries
+
+        // The datacards are centered around the featureGroup
+        // In horizontal the cards are [I | F]
+        // therefore we need to offset the grid by 1.5 units on X
+        // and 0.5 units on Y
+        const startX = DataCard.unitSize*1.5;
+        const startY = DataCard.unitSize*0.5;
+
+        // The grid ends at the right and bottom border
+        // therefore we need to subtract 0.5 units on X
+        // and 1.5 units on Y because the cards are vertical
+        const endX = this.width - DataCard.unitSize*0.5;
+        const endY = this.height - DataCard.unitSize*1.5;
+
+
+        // We add +1 to accommodate the cards
+        const numRows = this.pendingSize + 1;
+        const numCols = this.memorySize + 1;
+        this.gridX = d3.scalePoint()
+            .domain(d3.range(numCols))
+            .range([startX, endX])
+            .padding(padding);
+        this.gridY = d3.scalePoint()
+            .domain(d3.range(numRows))
+            .range([startY, endY])
+            .padding(padding);
+
         this.pendingDOMPositions = [];
-        const pendingY = d3.scaleBand()
-            .domain(d3.range(this.pendingSize))
-            .range([0, this.height - DataCard.unitSize])
-            .paddingInner(0.05);
-        
-        // We add +1 to allow smooth moving around the corner
         for (let i = 0; i < this.pendingSize; i++) {
-            const position = { x: pendingX, y: pendingY(i) };
+            const position = { x: this.gridX(0), y: this.gridY(i) };
             this.pendingDOMPositions.push(position);
         }
 
-        this.tempPosition = { 
-            x: 0, 
-            y: this.height - DataCard.unitSize 
-        };
-
-        // the labeled datacards are shown on the horizontal axis on the bottom
-        const memoryY = this.height - DataCard.unitSize;
         this.memoryDOMPositions = [];
-        scale = d3.scaleBand()
-            .domain(d3.range(this.memorySize))
-            .range([DataCard.unitSize*2, this.width])
-            .paddingInner(0.05);
-            
         for (let i = 0; i < this.memorySize; i++) {
-            const memoryX = scale(i);
-            const position = { x: memoryX, y: memoryY };
+            const position = { x: this.gridX(i+1), y: this.gridY(this.pendingSize) };
             this.memoryDOMPositions.push(position);
         }
 
+        this.transitionPosition = {
+            x: this.gridX(0),
+            y: this.gridY(this.pendingSize)
+        };
+    }
+
+
+    updateSimilarities() {
+        const similarities = dataHandler.similarities;
+        this.similarityGroup.selectAll("circle")
+            .data(similarities.flat())
+            .join("circle")
+            .attr("cx", (d, i) => this.gridX(i % this.memorySize + 1))
+            .attr("cy", (d, i) => this.gridY(Math.floor(i / this.memorySize)))
+            .attr("r", (d, i) => d * DataCard.maxCircleRadius)
+            .attr("fill", "green");
     }
 
     async addDataCard(dataEntry) {
         // Add card to the pending entries
-        const position = this.pendingDOMPositions[0];
-        const dataCard = new DataCard(dataEntry, position);
-        await dataCard.createDOM();
-        this.pending_entries.unshift(dataCard);
+        const dataCard = new DataCard(dataEntry);
+        await dataCard.createDOM(this.mainGroup);
+
+        this.pendingCards.unshift(dataCard);
         
         let transitionCard = null
-        if (this.pending_entries.length > this.pendingSize) {
-            transitionCard = this.pending_entries.pop();
+        if (this.pendingCards.length > this.pendingSize) {
+            transitionCard = this.pendingCards.pop();
         }
         this.updatePendingPositions();
 
@@ -265,55 +442,51 @@ class DOMHandler {
         if (transitionCard !== null) {
             // if labeled, add to the memory entries
             if (transitionCard.dataEntry.label !== null) {
-                this.memory_entries.unshift(transitionCard);
+                this.memoryCards.unshift(transitionCard);
                 await Promise.all([
-                    transitionCard.changePosition(this.tempPosition),
+                    transitionCard.changePosition(this.transitionPosition),
                     transitionCard.changeOrientation("vertical", 500)
                 ]);
             } else {
                 // if unlabeled, remove from the DOM
-                await transitionCard.changePosition(this.tempPosition);
+                await transitionCard.changePosition(this.transitionPosition);
                 transitionCard.removeDOM();
             }
         }
         
         // If the capacity of the memory entries is exceeded
         // remove the oldest memory entry
-        if (this.memory_entries.length > this.memorySize) {
-            const oldestMemoryCard = this.memory_entries.pop();
+        if (this.memoryCards.length > this.memorySize) {
+            const oldestMemoryCard = this.memoryCards.pop();
             oldestMemoryCard.removeDOM();
         }
 
         this.updateMemoryPositions();
+        this.updateSimilarities();
     }
 
     updatePendingPositions() {
         // Update the positions of the pending entries
-        for (let i = 0; i < this.pending_entries.length; i++) {
-            const pendingCard = this.pending_entries[i];
+        for (let i = 0; i < this.pendingCards.length; i++) {
+            const pendingCard = this.pendingCards[i];
             const position = this.pendingDOMPositions[i];
             pendingCard.changePosition(position);
         }
     }
     updateMemoryPositions() {
         // Update the positions of the memory entries
-        for (let i = 0; i < this.memory_entries.length; i++) {
-            const memoryCard = this.memory_entries[i];
+        for (let i = 0; i < this.memoryCards.length; i++) {
+            const memoryCard = this.memoryCards[i];
             const position = this.memoryDOMPositions[i];
             memoryCard.changePosition(position);
         }
     }
 }
+const domHandler = new DOMHandler();
 
 
-class SimilarityMatrixHandler {
-    constructor(position) {
 
-    }
-}
-
-
-function initializeModel(numClasses = 3) {
+function initializeModel(numClasses = NUM_CLASSES) {
     const input = tf.input({
         shape: [32, 32, 3],
         dataFormat: 'channelsLast',
@@ -349,10 +522,6 @@ function initializeModel(numClasses = 3) {
         kernelRegularizer: 'l1l2',
         padding: 'same',
     }));
-    // console.log(feature.outputShape);
-    // feature.add(tf.layers.globalAveragePooling2d({
-    //     dataFormat: 'channelsLast',
-    // }));
     feature.add(tf.layers.flatten());
     feature.add(tf.layers.dense({
         units: 64, 
@@ -361,7 +530,7 @@ function initializeModel(numClasses = 3) {
         activation:'selu'
     }));
     feature.add(tf.layers.dense({
-        units: 9, 
+        units: NUM_FEATURES, 
         kernelInitializer: 'varianceScaling', 
         kernelRegularizer: 'l1l2',
         activation:'sigmoid'
@@ -369,7 +538,7 @@ function initializeModel(numClasses = 3) {
 
     const classifier = tf.sequential();
     classifier.add(tf.layers.dense({
-        inputShape: [9],
+        inputShape: [NUM_FEATURES],
         units: numClasses, 
         kernelInitializer: 'varianceScaling', 
         kernelRegularizer: 'l1l2',
@@ -378,6 +547,8 @@ function initializeModel(numClasses = 3) {
     
     feat = feature.apply(input);
     pred = classifier.apply(feat);
+
+    
     
     const model = tf.model({
         inputs: input, 
@@ -506,14 +677,14 @@ async function createDataCard() {
     const inData = captureWebcam();
     const outData = model.predict(inData.Tensor);
     const dataEntry = new DataEntry(inData, outData);
-    DOMHandler.addDataCard(dataEntry);
+    dataHandler.addDataEntry(dataEntry);
+    domHandler.addDataCard(dataEntry);
 }
 
 
 // When the user clicks on the "Capture" button create a data entry
-const DOMHandler = new DOMHandler();
 document.getElementById('capture').addEventListener('click', async () => {
-    await createDataCard();
+    createDataCard();
 });
 
 // // When the user clicks on the "Capture" button create a data entry
