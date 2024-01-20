@@ -34,35 +34,62 @@
             stroke: #000;
             stroke-width: 1px;
         } */
-        .datacard-background {
+        /* .datacard-background .category-42 {
+            fill: #c5c5c3;
+            stroke: #000;
+            stroke-width: 1px;
+        }
+        .datacard .category-42 circle {
+            fill: #797979;
+            stroke: #303030;
+            stroke-width: 3px;
+        } */
+
+
+        .datacard.category-42 .datacard-background {
+            fill: #c5c5c3;
+            stroke: #000;
+            stroke-width: 1px;
+        }
+        .datacard.category-42 circle {
+            fill: #797979;
+            stroke: #303030;
+            stroke-width: 3px;
+        }
+
+        .datacard.category-0 .datacard-background {
             fill: #fefedd;
             stroke: #000;
             stroke-width: 1px;
         }
-        .datacard circle {
+        .datacard.category-0 circle {
             fill: #ffeb14;
             stroke: #d3c103;
             stroke-width: 2px;
         }
-        /* .datacard image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        } */
-        /* .datacard {
-            border-radius: 15px;
-            overflow: hidden;
-            width: 150px;
-            height: 150px;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+
+
+        .datacard.category-1 .datacard-background {
+            fill: #f7d3f9;
+            stroke: #000;
+            stroke-width: 1px;
+        }
+        .datacard.category-1 circle {
+            fill: #ffb3f7;
+            stroke: #7a2d90;
+            stroke-width: 2px;
         }
 
-        .datacard img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        } 
-        */
+        .datacard.category-2 .datacard-background {
+            fill: #d3f9f9;
+            stroke: #000;
+            stroke-width: 1px;
+        }
+        .datacard.category-2 circle {
+            fill: #b3f7f7;
+            stroke: #2d9090;
+            stroke-width: 2px;
+        }
     </style>
     <script src = "https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
@@ -73,7 +100,7 @@
         <canvas id="aux-canvas" style="display: none;"></canvas>
     </div>
     <div id="svg-container">
-        <svg id="main" viewBox="0 0 1000 1000"></svg>
+        <svg id="main" viewBox="0 0 1000 700"></svg>
     </div>
     <input type="button" id="capture" value="Capture">
     <script src="demo.js"></script>

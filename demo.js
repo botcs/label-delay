@@ -2,6 +2,7 @@ const PENDING_SIZE = 3;
 const MEMORY_SIZE = 5;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
+const UNLABELED = 42;
 
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('aux-canvas');
@@ -16,9 +17,10 @@ const clip = svg.append("defs")
 
 class DataEntry {
     static count = 0;
-    constructor(inData, outData, label = 1) {
+    constructor(inData, outData, label = UNLABELED) {
         this.inData = inData; // An image or a video frame
 
+        this.inData.Tensor = tf.variable(inData.Tensor);
         // A [NUM_CLASES] tensor representing the class probabilities
         this.pred = tf.variable(tf.squeeze(outData[0]));
 
@@ -28,10 +30,8 @@ class DataEntry {
         this.label = label; // A string or number representing the label
         this.id = DataEntry.count;
 
-        if (this.id === 3){
-            this.feat.assign(tf.tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]));
-        }
 
+        this.dataCard = null;
         DataEntry.count++;
     }
 
@@ -47,6 +47,7 @@ class DataEntry {
         this.pred.assign(tf.squeeze(outData[0]));
         feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
+        this.dataCard.updateDOM();
     }
 }
 
@@ -143,7 +144,7 @@ class DataHandler {
             const transitionEntry = this.pendingEntries.pop();
             
             // If labeled, add to the memory entries
-            if (transitionEntry.label !== null) {
+            if (transitionEntry.label !== UNLABELED) {
                 this.memoryEntries.unshift(transitionEntry);
 
                 // Add new column to the left and remove right column
@@ -170,24 +171,24 @@ class DataHandler {
         this.scores.assign(tf.softmax(this.similarities, 1));
     }
 
-    // async updateSimilarities(pendingIndex = null, memoryIndex = null) {
-    //     // Lazy update of the similarities
-    //     if (pendingIndex !== null) {
-    //         const simPenToMem = await this.computeSingleSimilarity(
-    //             this.pendingEntries[pendingIndex], this.memoryEntries
-    //         );
-    //         this.similarities[pendingIndex] = simPenToMem;
-    //     }
+    async updateSimilaritiesRow(rowIndex) {
+        // Lazy update of the similarities
+        const simPenToMem = this.computeSingleSimilarity(
+            this.pendingEntries[rowIndex], 
+            this.memoryEntries, 
+            this.memorySize
+        );
+        // use tf assign to update the similarities
+        const beforeRow = this.similarities.slice([0, 0], [rowIndex, -1]); // Slice before the row
+        const afterRow = this.similarities.slice([rowIndex + 1, 0], [-1, -1]); // Slice after the row
+    
+        // Concatenate the parts with the new row
+        const similarities = tf.concat([beforeRow, tf.reshape(simPenToMem, [1, -1]), afterRow], 0);
+        this.similarities.assign(similarities);
 
-    //     if (memoryIndex !== null) {
-    //         const simMemToPen = await this.computeSingleSimilarity(
-    //             this.memoryEntries[memoryIndex], this.pendingEntries
-    //         );
-    //         this.similarities.forEach((row, i) => {
-    //             row[memoryIndex] = simMemToPen[i];
-    //         });
-    //     }
-    // }
+        // Update the softmax scores
+        this.scores.assign(tf.softmax(this.similarities, 1));
+    }
 }
 const dataHandler = new DataHandler();
 
@@ -222,10 +223,13 @@ class DataCard {
     static maxCircleRadius = DataCard.unitSize / 3 / 2 * .9;
 
     constructor(dataEntry, position = {x: 0, y: 0}, orientation="horizontal") {
+        dataEntry.dataCard = this;
+
         this.dataEntry = dataEntry;
         this.position = position;
         this.orientation = orientation;
         this.layout = DataCard.layouts[orientation];
+        this.rendered = false;
     }
 
     async createDOM(parentGroup = null) {
@@ -235,7 +239,8 @@ class DataCard {
         const mainGroup = parentGroup
             .append("g");
         
-        mainGroup.attr("class", "datacard")
+        mainGroup.classed("datacard", true)
+            .classed("category-" + this.dataEntry.label, true)
             .attr("data-id", this.dataEntry.id)
             .attr("transform", `translate(${this.position.x}, ${this.position.y})`);
 
@@ -280,26 +285,45 @@ class DataCard {
             .classed("feature-group", true)
             .attr("transform", `translate(${this.layout.feature.x}, ${this.layout.feature.y})`);
 
+            
+        const feat = await this.dataEntry.feat.data();
+            
+        const featPerRow = Math.ceil(Math.sqrt(feat.length));
         const pos = d3.scalePoint()
-            .domain(d3.range(3))
+            .domain(d3.range(featPerRow))
             .range([0, DataCard.unitSize])
             .padding(.5);
-
-        const feat = await this.dataEntry.feat.data();
         
         featureGroup.selectAll("circle")
             .data(feat)
             .join("circle")
-            .attr("cx", (d, i) => pos(i % 3))
-            .attr("cy", (d, i) => pos(Math.floor(i / 3)))
+            .attr("cx", (d, i) => pos(i % featPerRow))
+            .attr("cy", (d, i) => pos(Math.floor(i / featPerRow)))
             .attr("r", (d, i) => d * DataCard.maxCircleRadius)
-            .attr("fill", "black");
 
         this.mainGroup = mainGroup;
         this.background = background;
         this.imageGroup = imageGroup;
         this.featureGroup = featureGroup;
+        this.rendered = true;
     }
+
+    async updateDOM() {
+        if (!this.rendered) {
+            return;
+        }
+
+        // Update the image and the feature vector
+        this.imageGroup.select("image")
+            .attr("xlink:href", this.dataEntry.inData.dataURL);
+
+        const feat = await this.dataEntry.feat.data();
+        this.featureGroup.selectAll("circle")
+            .data(feat)
+            .join("circle")
+            .attr("r", (d, i) => d * DataCard.maxCircleRadius)
+    }
+
 
     async changeOrientation(orientation, duration=250) {
         if (orientation === this.orientation) {
@@ -400,13 +424,12 @@ class DOMHandler {
             .attr("id", "DOMHandler")
             .attr("transform", `translate(${offset.x}, ${offset.y})`);
         this.mainGroup.append("rect")
-            .attr("fill", "pink")
+            .attr("fill", "lightgray")
             .attr("width", width)
             .attr("height", height);
 
         this.similarityGroup = this.mainGroup.append("g")
             .attr("id", "similarityGroup");
-        this.renderSimilarities();
     }
 
 
@@ -493,7 +516,7 @@ class DOMHandler {
             
         if (transitionCard !== null) {
             // if labeled, add to the memory entries
-            if (transitionCard.dataEntry.label !== null) {
+            if (transitionCard.dataEntry.label !== UNLABELED) {
                 this.memoryCards.unshift(transitionCard);
                 await Promise.all([
                     transitionCard.changePosition(this.transitionPosition),
@@ -514,7 +537,9 @@ class DOMHandler {
         }
 
         this.updateMemoryPositions();
-        this.renderSimilarities();
+        if (this.memoryCards.length > 0) {
+            this.renderSimilarities();
+        }
     }
 
     updatePendingPositions() {
@@ -588,17 +613,16 @@ function initializeModel(numClasses = NUM_CLASSES) {
         activation:'sigmoid'
     }));
 
-    const classifier = tf.sequential();
-    classifier.add(tf.layers.dense({
+    const logit = tf.sequential();
+    logit.add(tf.layers.dense({
         inputShape: [NUM_FEATURES],
         units: numClasses, 
         kernelInitializer: 'varianceScaling', 
         kernelRegularizer: 'l1l2',
-        activation:'softmax'
     }));
     
     feat = feature.apply(input);
-    pred = classifier.apply(feat);
+    pred = logit.apply(feat);
 
     
     
@@ -652,23 +676,25 @@ function frameToTensor(video) {
 
 
 
+
 // Start the webcam feed
-function startWebcam() {
+async function startWebcam() {
     if (navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                video.srcObject = stream;
-            })
-            .catch(error => {
-                console.error('Error accessing the webcam', error);
-            });
+        video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true })
     }
 
     // Add event listener to the webcam feed
     video.addEventListener('loadeddata', () => {
-        console.log('Video loaded');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+    });
+
+    // wait until the video is loaded
+    await new Promise(resolve => {
+        video.addEventListener('loadeddata', () => {
+            console.log('Video loaded');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            resolve();
+        });
     });
 }
 
@@ -716,35 +742,84 @@ function captureWebcam() {
     return frame;
 }
 
-
-// Initialize the webcam on page load
-document.addEventListener('DOMContentLoaded', 
-    () => {
-        startWebcam();
-        model = initializeModel();
-    }
-);
-
 // inData = tf.zeros([1, 32, 32, 3]);
-async function createDataCard() {
+async function createDataCard(label = UNLABELED) {
     // outData = model.predict(inData);
     tf.tidy(() => {
         const inData = captureWebcam();
         const outData = model.predict(inData.Tensor);
-        const dataEntry = new DataEntry(inData, outData);
+        const dataEntry = new DataEntry(inData, outData, label);
         
         dataHandler.addDataEntry(dataEntry);
         domHandler.addDataCard(dataEntry);
     });
     console.log(tf.memory().numTensors);
-
+    
 }
 
 
-// When the user clicks on the "Capture" button create a data entry
-document.getElementById('capture').addEventListener('click', async () => {
-    createDataCard();
-});
+
+async function updatePendingDataCard(idx) {
+    // Update the newest data entry
+    const dataEntry = dataHandler.pendingEntries[idx];
+    tf.tidy(() => {
+        const inData = captureWebcam();
+        const outData = model.predict(inData.Tensor);
+        dataEntry.updateData(inData, outData);
+        dataHandler.updateSimilaritiesRow(idx);
+        domHandler.renderSimilarities();
+    });
+}
+
+
+async function trainModel() {
+    // Train the model
+    const optimizer = model.optimizer;
+    const lossFunction = tf.losses.softmaxCrossEntropy;
+    const batchSize = 2;
+
+    const indices = [];
+    for (let i = 0; i < batchSize; i++) {
+        const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        indices.push(idx);
+    }
+    const data = tf.tidy(() => {
+        const data = [];
+        for (let i = 0; i < indices.length; i++) {
+            const dataEntry = dataHandler.memoryEntries[indices[i]];
+            data.push(dataEntry.inData.Tensor);
+        }
+        return tf.concat(data, 0);
+    });
+    const labels = tf.tidy(() => {
+        const labels = [];
+        for (let i = 0; i < indices.length; i++) {
+            const dataEntry = dataHandler.memoryEntries[indices[i]];
+            labels.push(parseInt(dataEntry.label));
+        }
+        return tf.oneHot(labels, NUM_CLASSES);
+    });
+    const loss = optimizer.minimize(() => {
+        const logits = model.predict(data)[0];
+        const loss = lossFunction(labels, logits);
+        loss.print();
+        return loss;
+    });
+    console.log(loss);
+}
+
+// Initialize the webcam on page load
+document.addEventListener('DOMContentLoaded', 
+    async () => {
+        await startWebcam();
+        model = initializeModel();
+        createDataCard();
+    }
+);
+
+// Periodically update the last data entry
+// setInterval(async () => {updatePendingDataCard(0);}, 33);
+
 
 // // When the user clicks on the "Capture" button create a data entry
 // dataEntries = [];
@@ -759,3 +834,22 @@ document.getElementById('capture').addEventListener('click', async () => {
 //         .attr('class', 'datacard')
 //         .html(d => `<img src="${d.inData.dataURL}" />`);
 // });
+document.addEventListener('keydown', function(event) {
+    let label;
+    switch (event.key.toLowerCase()) {
+        case 'b':
+            label = '0';
+            break;
+        case 'n':
+            label = '1';
+            break;
+        case 'm':
+            label = '2';
+            break;
+        default:
+            return; // Do nothing if it's any other key
+    }
+    createDataCard(label);
+    
+    // Handle the output as needed, such as updating the UI or triggering other actions.
+});
