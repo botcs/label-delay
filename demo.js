@@ -18,9 +18,13 @@ class DataEntry {
     static count = 0;
     constructor(inData, outData, label = 1) {
         this.inData = inData; // An image or a video frame
-        this.pred = tf.squeeze(outData[0]); // A [NUM_CLASES] tensor representing the class probabilities
-        this.feat = tf.squeeze(outData[1]); // A [NUM_FEATURES] tensor representing the feature vector
-        this.normalizedFeat = this.feat.div(this.feat.norm(2));
+
+        // A [NUM_CLASES] tensor representing the class probabilities
+        this.pred = tf.variable(tf.squeeze(outData[0]));
+
+        // A [NUM_FEATURES] tensor representing the feature vector
+        feat = outData[1];
+        this.feat = tf.variable(tf.squeeze(feat.div(feat.norm(2))));
         this.label = label; // A string or number representing the label
         this.id = DataEntry.count;
         DataEntry.count++;
@@ -30,7 +34,14 @@ class DataEntry {
         this.inData.Tensor.dispose();
         this.pred.dispose();
         this.feat.dispose();
-        this.normalizedFeat.dispose();
+    }
+
+    updateData(inData, outData) {
+        // Update the data of the entry
+        this.inData = inData;
+        this.pred.assign(tf.squeeze(outData[0]));
+        feat = outData[1];
+        this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
     }
 }
 
@@ -43,49 +54,83 @@ class DataHandler {
         this.pendingEntries = [];
 
 
+        // Use this to store the cosine similarities
+        this.similarities = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
 
-        this.similarities = [];
-        for (let i = 0; i < this.pendingSize; i++) {
-            this.similarities.push([]);
-            for (let j = 0; j < this.memorySize; j++) {
-                this.similarities[i].push(0);
-            }
+        // Use this to store softmax scores
+        this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
+    }
+
+    unshiftAndPop(matrix, vector, dim) {
+        // Add the vector to the matrix and remove the last vector
+        // along the specified dimension
+        
+        // const requiredShape = matrix.shape.slice(0, dim)
+            // .concat(matrix.shape.slice(dim+1));
+
+        const requiredShape = Array.from(matrix.shape);
+        requiredShape[dim] = 1;
+
+        vector = vector.expandDims(dim);
+
+        if (!vector.shape.every((d, i) => d === requiredShape[i])) {
+            console.log(vector.shape);
+            console.log(matrix.shape);
+            throw new Error('The dimensions of the vector and matrix do not match');
         }
+
+        const sliceStart = Array(matrix.shape.length).fill(0);
+        // const sliceEnd = matrixTensor.shape.clone();
+        const sliceEnd = Array.from(matrix.shape);
+        sliceEnd[dim] -= 1;
+
+        const popMatrix = matrix.slice(sliceStart, sliceEnd);
+        const newMatrix = tf.concat([vector, popMatrix], dim);
+
+        return newMatrix;
     }
 
     // In this app we only update either rows or lines never the entire matrix
-    async computeSingleSimilarity(queryEntry, keyEntries, expectedLength) {
-        if (keyEntries.length === 0) {
-            return Array(expectedLength).fill(0);
+    computeSingleSimilarity(queryEntry, keyEntries, expectedLength) {
+        if (keyEntries.length > expectedLength) {
+            throw new Error('The length of the key entries is larger than expected');
         }
 
-        const queryFeat = queryEntry.normalizedFeat;
+        if (keyEntries.length === 0) {
+            return tf.zeros([expectedLength]);
+        }
+
+        const queryFeat = queryEntry.feat;
         let keyFeats = [];
         for (let i = 0; i < keyEntries.length; i++) {
-            keyFeats.push(keyEntries[i].normalizedFeat);
+            keyFeats.push(keyEntries[i].feat);
         }
-        keyFeats = tf.stack(keyFeats);
-        const sim = tf.dot(keyFeats, queryFeat);
-        const simData = await sim.data();
-        sim.dispose();
-        keyFeats.dispose();
 
-        const ret = Array(expectedLength).fill(0);
-        simData.forEach((s, i) => {
-            ret[i] = s;
-        });
-        return ret;
+        keyFeats = tf.stack(keyFeats);
+        let sim = tf.dot(keyFeats, queryFeat);
+
+        // If the length of the key entries is smaller than expected
+        // we need to pad the similarity matrix with zeros
+        if (keyEntries.length < expectedLength) {
+            const padLength = expectedLength - keyEntries.length;
+            const pad = tf.zeros([padLength]);
+            sim = tf.concat([sim, pad]);
+        }
+
+        return sim
     }
 
+    
     async addDataEntry(dataEntry) {
         this.pendingEntries.unshift(dataEntry);
 
         // Add new row to the top and remove bottom row
-        const simPenToMem = await this.computeSingleSimilarity(
-            dataEntry, this.memoryEntries, this.memorySize
-        );
-        this.similarities.unshift(simPenToMem);
-        this.similarities.pop();
+        const simPenToMem = this.computeSingleSimilarity(
+                dataEntry, this.memoryEntries, this.memorySize
+            )
+        this.similarities.assign(this.unshiftAndPop(
+            this.similarities, simPenToMem, 0
+        ));
 
         // If the capacity of the pending entries is exceeded
         if (this.pendingEntries.length > this.pendingSize) {
@@ -97,13 +142,13 @@ class DataHandler {
                 this.memoryEntries.unshift(transitionEntry);
 
                 // Add new column to the left and remove right column
-                const simMemToPen = await this.computeSingleSimilarity(
+                
+                const simMemToPen = this.computeSingleSimilarity(
                     transitionEntry, this.pendingEntries, this.pendingSize
                 );
-                this.similarities.forEach((row, i) => {
-                    row.unshift(simMemToPen[i]);
-                    row.pop();
-                });
+                this.similarities.assign(this.unshiftAndPop(
+                    this.similarities, simMemToPen, 1
+                ));
             } else {
                 transitionEntry.dispose();
             }
@@ -116,27 +161,28 @@ class DataHandler {
             oldestEntry.dispose();
         }
 
-        console.log(this.similarities);
+        // Update the softmax scores
+        this.scores.assign(tf.softmax(this.similarities, 1));
     }
 
-    async updateSimilarities(pendingIndex = null, memoryIndex = null) {
-        // Lazy update of the similarities
-        if (pendingIndex !== null) {
-            const simPenToMem = await this.computeSingleSimilarity(
-                this.pendingEntries[pendingIndex], this.memoryEntries
-            );
-            this.similarities[pendingIndex] = simPenToMem;
-        }
+    // async updateSimilarities(pendingIndex = null, memoryIndex = null) {
+    //     // Lazy update of the similarities
+    //     if (pendingIndex !== null) {
+    //         const simPenToMem = await this.computeSingleSimilarity(
+    //             this.pendingEntries[pendingIndex], this.memoryEntries
+    //         );
+    //         this.similarities[pendingIndex] = simPenToMem;
+    //     }
 
-        if (memoryIndex !== null) {
-            const simMemToPen = await this.computeSingleSimilarity(
-                this.memoryEntries[memoryIndex], this.pendingEntries
-            );
-            this.similarities.forEach((row, i) => {
-                row[memoryIndex] = simMemToPen[i];
-            });
-        }
-    }
+    //     if (memoryIndex !== null) {
+    //         const simMemToPen = await this.computeSingleSimilarity(
+    //             this.memoryEntries[memoryIndex], this.pendingEntries
+    //         );
+    //         this.similarities.forEach((row, i) => {
+    //             row[memoryIndex] = simMemToPen[i];
+    //         });
+    //     }
+    // }
 }
 const dataHandler = new DataHandler();
 
@@ -415,14 +461,14 @@ class DOMHandler {
 
 
     updateSimilarities() {
-        const similarities = dataHandler.similarities;
-        this.similarityGroup.selectAll("circle")
-            .data(similarities.flat())
-            .join("circle")
-            .attr("cx", (d, i) => this.gridX(i % this.memorySize + 1))
-            .attr("cy", (d, i) => this.gridY(Math.floor(i / this.memorySize)))
-            .attr("r", (d, i) => d * DataCard.maxCircleRadius)
-            .attr("fill", "green");
+        // const similarities = dataHandler.similarities;
+        // this.similarityGroup.selectAll("circle")
+        //     .data(similarities.flat())
+        //     .join("circle")
+        //     .attr("cx", (d, i) => this.gridX(i % this.memorySize + 1))
+        //     .attr("cy", (d, i) => this.gridY(Math.floor(i / this.memorySize)))
+        //     .attr("r", (d, i) => d * DataCard.maxCircleRadius)
+        //     .attr("fill", "green");
     }
 
     async addDataCard(dataEntry) {
@@ -673,12 +719,19 @@ document.addEventListener('DOMContentLoaded',
     }
 );
 
+// inData = tf.zeros([1, 32, 32, 3]);
 async function createDataCard() {
-    const inData = captureWebcam();
-    const outData = model.predict(inData.Tensor);
-    const dataEntry = new DataEntry(inData, outData);
-    dataHandler.addDataEntry(dataEntry);
-    domHandler.addDataCard(dataEntry);
+    // outData = model.predict(inData);
+    tf.tidy(() => {
+        const inData = captureWebcam();
+        const outData = model.predict(inData.Tensor);
+        const dataEntry = new DataEntry(inData, outData);
+        
+        dataHandler.addDataEntry(dataEntry);
+        domHandler.addDataCard(dataEntry);
+    });
+    console.log(tf.memory().numTensors);
+
 }
 
 
