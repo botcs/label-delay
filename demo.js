@@ -27,6 +27,11 @@ class DataEntry {
         this.feat = tf.variable(tf.squeeze(feat.div(feat.norm(2))));
         this.label = label; // A string or number representing the label
         this.id = DataEntry.count;
+
+        if (this.id === 3){
+            this.feat.assign(tf.tensor([1, 0, 0, 0, 0, 0, 0, 0, 0]));
+        }
+
         DataEntry.count++;
     }
 
@@ -401,7 +406,7 @@ class DOMHandler {
 
         this.similarityGroup = this.mainGroup.append("g")
             .attr("id", "similarityGroup");
-        this.updateSimilarities();
+        this.renderSimilarities();
     }
 
 
@@ -460,15 +465,16 @@ class DOMHandler {
     }
 
 
-    updateSimilarities() {
-        // const similarities = dataHandler.similarities;
-        // this.similarityGroup.selectAll("circle")
-        //     .data(similarities.flat())
-        //     .join("circle")
-        //     .attr("cx", (d, i) => this.gridX(i % this.memorySize + 1))
-        //     .attr("cy", (d, i) => this.gridY(Math.floor(i / this.memorySize)))
-        //     .attr("r", (d, i) => d * DataCard.maxCircleRadius)
-        //     .attr("fill", "green");
+    async renderSimilarities() {
+        const scores = await dataHandler.scores.data();
+        const scoresFlat = Array.from(scores).flat();
+        this.similarityGroup.selectAll("circle")
+            .data(scores)
+            .join("circle")
+            .attr("cx", (d, i) => this.gridX(i % this.memorySize + 1))
+            .attr("cy", (d, i) => this.gridY(Math.floor(i / this.memorySize)))
+            .attr("r", (d, i) => d * DataCard.unitSize)
+            .attr("fill", "green");
     }
 
     async addDataCard(dataEntry) {
@@ -508,7 +514,7 @@ class DOMHandler {
         }
 
         this.updateMemoryPositions();
-        this.updateSimilarities();
+        this.renderSimilarities();
     }
 
     updatePendingPositions() {
