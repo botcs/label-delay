@@ -456,6 +456,8 @@ class DOMHandler {
 
         this.similarityGroup = this.mainGroup.append("g")
             .attr("id", "similarityGroup");
+
+        this.renderPromise = null;
     }
 
 
@@ -518,9 +520,14 @@ class DOMHandler {
         const numCols = scores[0].length;
         const maxScores = scores.map(row => d3.max(row)); // Maximum score per row
     
-        const barPadding = 0.1;
+        const barPadding = 0.3;
         const barWidth = DataCard.unitSize * (1 - barPadding);
-        const barHeight = DataCard.unitSize;
+        const barHeight = DataCard.unitSize * 0.95;
+
+        const barHeightScale = (d, i) => d3.scaleLinear()
+            .domain([0, maxScores[Math.floor(i / numCols)]])
+            .range([0, barHeight])(d);
+
         const barX = (j) => this.gridX(j % numCols + 1) - barWidth / 2;
         // Adjusted barY to start from the baseline
         const barY = (d, i) => {
@@ -532,33 +539,37 @@ class DOMHandler {
     
         const maxIndices = scores.map(row => d3.maxIndex(row));
     
-        function barColor(d, i) {
+        function barOpacity(d, i) {
             if (i % numCols === maxIndices[Math.floor(i / numCols)]) {
-                return "green";
+                return 1.0;
             }
-            return "blue";
+            return .8;
         }
-        const barHeightScale = (d, i) => d3.scaleLinear()
-            .domain([0, maxScores[Math.floor(i / numCols)]])
-            .range([0, barHeight])(d);
     
         this.similarityGroup.selectAll("rect")
             .data(scores.flat())
             .join("rect")
+            .transition()
+            .duration(100)
             .attr("x", (d, i) => barX(i))
             .attr("y", (d, i) => barY(d, i)) // Updated y attribute
             .attr("width", barWidth)
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
-            .attr("fill", (d, i) => barColor(d, i));
+            .attr("fill", (d, i) => "#1f77b4")
+            .style("opacity", (d, i) => barOpacity(d, i))
+            .style("stroke", "#13496f")
+            .style("stroke-width", "2px")
+            .attr("rx", 10)
+            .attr("ry", 10);
     }
 
     async addDataCard(dataEntry) {
-        if (this.renderPromise !== undefined) {
+        if (this.renderPromise !== null) {
             return this.renderPromise;
         }
         this.renderPromise = this._addDataCard(dataEntry);
         await this.renderPromise;
-        this.renderPromise = undefined;
+        this.renderPromise = null;
     }
 
     async _addDataCard(dataEntry) {
@@ -747,8 +758,6 @@ function frameToTensor(video) {
 }
 
 
-
-
 // Start the webcam feed
 async function startWebcam() {
     if (navigator.mediaDevices.getUserMedia) {
@@ -816,6 +825,10 @@ function captureWebcam() {
 
 // inData = tf.zeros([1, 32, 32, 3]);
 async function createDataCard(label = UNLABELED) {
+    if (domHandler.renderPromise !== null) {
+        return;
+    }
+
     // outData = model.predict(inData);
     const dataEntry = tf.tidy(() => {
         const inData = captureWebcam();
