@@ -43,11 +43,11 @@ class DataEntry {
 
     updateData(inData, outData) {
         // Update the data of the entry
-        this.inData = inData;
+        this.inData.dataURL = inData.dataURL;
+        this.inData.Tensor.assign(inData.Tensor);
         this.pred.assign(tf.squeeze(outData[0]));
         feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
-        this.dataCard.updateDOM();
     }
 }
 
@@ -220,7 +220,7 @@ class DataCard {
         }
     }
 
-    static maxCircleRadius = DataCard.unitSize / 3 / 2 * .9;
+    static maxCircleRadius = DataCard.unitSize / Math.sqrt(NUM_FEATURES) / 2 * .8;
 
     constructor(dataEntry, position = {x: 0, y: 0}, orientation="horizontal") {
         dataEntry.dataCard = this;
@@ -229,10 +229,19 @@ class DataCard {
         this.position = position;
         this.orientation = orientation;
         this.layout = DataCard.layouts[orientation];
-        this.rendered = false;
+        this.renderPromise = null;
     }
 
     async createDOM(parentGroup = null) {
+        if (this.renderPromise !== null) {
+            return this.renderPromise;
+        }
+        this.renderPromise = this._createDOM(parentGroup);
+        await this.renderPromise;
+        this.renderPromise = null;
+    }
+
+    async _createDOM(parentGroup = null) {
         if (parentGroup === null) {
             parentGroup = svg;
         }
@@ -286,7 +295,12 @@ class DataCard {
             .attr("transform", `translate(${this.layout.feature.x}, ${this.layout.feature.y})`);
 
             
-        const feat = await this.dataEntry.feat.data();
+        let feat = await this.dataEntry.feat.data();
+        
+        // since feat is in [-inf, inf] we need to map it to [0, 1]
+        const maxFeatVal = d3.max(feat);
+        const minFeatVal = d3.min(feat);
+        feat = feat.map(d => (d - minFeatVal) / (maxFeatVal - minFeatVal));
             
         const featPerRow = Math.ceil(Math.sqrt(feat.length));
         const pos = d3.scalePoint()
@@ -312,12 +326,24 @@ class DataCard {
         if (!this.rendered) {
             return;
         }
-
+        if (this.renderPromise !== null) {
+            return this.renderPromise;
+        }
+        this.renderPromise = this._updateDOM();
+        await this.renderPromise;
+        this.renderPromise = null;
+    }
+    async _updateDOM() {
+        
         // Update the image and the feature vector
         this.imageGroup.select("image")
             .attr("xlink:href", this.dataEntry.inData.dataURL);
 
-        const feat = await this.dataEntry.feat.data();
+        let feat = await this.dataEntry.feat.data();
+        const maxFeatVal = d3.max(feat);
+        const minFeatVal = d3.min(feat);
+        feat = feat.map(d => (d - minFeatVal) / (maxFeatVal - minFeatVal));
+
         this.featureGroup.selectAll("circle")
             .data(feat)
             .join("circle")
@@ -525,10 +551,17 @@ class DOMHandler {
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
             .attr("fill", (d, i) => barColor(d, i));
     }
-    
-    
 
     async addDataCard(dataEntry) {
+        if (this.renderPromise !== undefined) {
+            return this.renderPromise;
+        }
+        this.renderPromise = this._addDataCard(dataEntry);
+        await this.renderPromise;
+        this.renderPromise = undefined;
+    }
+
+    async _addDataCard(dataEntry) {
         // Add card to the pending entries
         const dataCard = new DataCard(dataEntry);
         await dataCard.createDOM(this.mainGroup);
@@ -539,7 +572,7 @@ class DOMHandler {
         if (this.pendingCards.length > this.pendingSize) {
             transitionCard = this.pendingCards.pop();
         }
-        this.updatePendingPositions();
+        const asyncMoveCall = this.updatePendingPositions();
 
             
         if (transitionCard !== null) {
@@ -548,14 +581,19 @@ class DOMHandler {
                 this.memoryCards.unshift(transitionCard);
                 await Promise.all([
                     transitionCard.changePosition(this.transitionPosition),
-                    transitionCard.changeOrientation("vertical", 500)
+                    transitionCard.changeOrientation("vertical", 500),
+                    asyncMoveCall
                 ]);
             } else {
                 // if unlabeled, remove from the DOM
-                await transitionCard.changePosition(this.transitionPosition);
+                await Promise.all([
+                    transitionCard.changePosition(this.transitionPosition),
+                    asyncMoveCall
+                ]);
                 transitionCard.removeDOM();
             }
         }
+        await asyncMoveCall;
         
         // If the capacity of the memory entries is exceeded
         // remove the oldest memory entry
@@ -564,27 +602,33 @@ class DOMHandler {
             oldestMemoryCard.removeDOM();
         }
 
-        this.updateMemoryPositions();
+        await this.updateMemoryPositions();
         if (this.memoryCards.length > 0) {
             this.renderSimilarities();
         }
     }
 
-    updatePendingPositions() {
+    async updatePendingPositions() {
+        const asyncCalls = [];
         // Update the positions of the pending entries
         for (let i = 0; i < this.pendingCards.length; i++) {
             const pendingCard = this.pendingCards[i];
             const position = this.pendingDOMPositions[i];
-            pendingCard.changePosition(position);
+            const asyncCall = pendingCard.changePosition(position);
+            asyncCalls.push(asyncCall);
         }
+        await Promise.all(asyncCalls);
     }
-    updateMemoryPositions() {
+    async updateMemoryPositions() {
+        const asyncCalls = [];
         // Update the positions of the memory entries
         for (let i = 0; i < this.memoryCards.length; i++) {
             const memoryCard = this.memoryCards[i];
             const position = this.memoryDOMPositions[i];
-            memoryCard.changePosition(position);
+            const asyncCall = memoryCard.changePosition(position);
+            asyncCalls.push(asyncCall);
         }
+        await Promise.all(asyncCalls);
     }
 }
 const domHandler = new DOMHandler();
@@ -638,7 +682,7 @@ function initializeModel(numClasses = NUM_CLASSES) {
         units: NUM_FEATURES, 
         kernelInitializer: 'varianceScaling', 
         kernelRegularizer: 'l1l2',
-        activation:'sigmoid'
+        activation:'tanh'
     }));
 
     const logit = tf.sequential();
@@ -773,14 +817,15 @@ function captureWebcam() {
 // inData = tf.zeros([1, 32, 32, 3]);
 async function createDataCard(label = UNLABELED) {
     // outData = model.predict(inData);
-    tf.tidy(() => {
+    const dataEntry = tf.tidy(() => {
         const inData = captureWebcam();
         const outData = model.predict(inData.Tensor);
         const dataEntry = new DataEntry(inData, outData, label);
-        
         dataHandler.addDataEntry(dataEntry);
-        domHandler.addDataCard(dataEntry);
+        return dataEntry;
     });
+    
+    await domHandler.addDataCard(dataEntry);
     console.log(tf.memory().numTensors);
     
 }
@@ -789,14 +834,15 @@ async function createDataCard(label = UNLABELED) {
 
 async function updatePendingDataCard(idx) {
     // Update the newest data entry
-    const dataEntry = dataHandler.pendingEntries[idx];
     tf.tidy(() => {
+        const dataEntry = dataHandler.pendingEntries[idx];
         const inData = captureWebcam();
         const outData = model.predict(inData.Tensor);
         dataEntry.updateData(inData, outData);
         dataHandler.updateSimilaritiesRow(idx);
-        domHandler.renderSimilarities();
     });
+    await domHandler.renderSimilarities();
+    await domHandler.pendingCards[idx].updateDOM();
 }
 
 
@@ -841,7 +887,7 @@ document.addEventListener('DOMContentLoaded',
     async () => {
         await startWebcam();
         model = initializeModel();
-        createDataCard();
+        await createDataCard();
     }
 );
 
@@ -862,7 +908,7 @@ document.addEventListener('DOMContentLoaded',
 //         .attr('class', 'datacard')
 //         .html(d => `<img src="${d.inData.dataURL}" />`);
 // });
-document.addEventListener('keydown', function(event) {
+document.addEventListener('keydown', async function(event) {
     let label;
     switch (event.key.toLowerCase()) {
         case 'b':
@@ -877,7 +923,7 @@ document.addEventListener('keydown', function(event) {
         default:
             return; // Do nothing if it's any other key
     }
-    createDataCard(label);
+    await createDataCard(label);
     
     // Handle the output as needed, such as updating the UI or triggering other actions.
 });
