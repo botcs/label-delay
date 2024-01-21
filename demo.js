@@ -1,5 +1,5 @@
 const PENDING_SIZE = 3;
-const MEMORY_SIZE = 5;
+const MEMORY_SIZE = 8;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -430,7 +430,7 @@ class DOMHandler {
         memorySize = MEMORY_SIZE, 
         pendingSize = PENDING_SIZE, 
         offset = {x:0, y:0},
-        width = 700, 
+        width = 1000, 
         height = 500
     ) {
         // the memory entries are the labeled datacards
@@ -515,6 +515,9 @@ class DOMHandler {
         };
     }
     async renderSimilarities() {
+        if (this.memoryCards.length === 0) {
+            return;
+        }
         const scores = await dataHandler.scores.array();
         const numRows = scores.length;
         const numCols = scores[0].length;
@@ -901,11 +904,11 @@ document.addEventListener('DOMContentLoaded',
         await startWebcam();
         model = initializeModel();
         await createDataCard();
+        setInterval(async () => {updatePendingDataCard(0);}, 33);
     }
 );
 
 // Periodically update the last data entry
-// setInterval(async () => {updatePendingDataCard(0);}, 33);
 
 
 // // When the user clicks on the "Capture" button create a data entry
@@ -924,6 +927,9 @@ document.addEventListener('DOMContentLoaded',
 document.addEventListener('keydown', async function(event) {
     let label;
     switch (event.key.toLowerCase()) {
+        case 'v':
+            label = UNLABELED;
+            break;
         case 'b':
             label = '0';
             break;
