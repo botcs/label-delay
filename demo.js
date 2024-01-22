@@ -657,7 +657,7 @@ class DOMHandler {
         const RNDCard = this.memoryCards[trainer.randomIdx];
         const startRND = {
             x: RNDCard.position.x + RNDCard.layout.shape.width / 2,
-            y: RNDCard.position.y + RNDCard.layout.shape.height
+            y: this.gridY(this.pendingSize) + DataCard.unitSize * 1.5
         }
         const endRND = {
             x: parseInt(this.X_RND.attr("x")),
@@ -673,7 +673,7 @@ class DOMHandler {
         const IWMCard = this.memoryCards[maxIndices[0]];
         const start = {
             x: IWMCard.position.x + IWMCard.layout.shape.width / 2,
-            y: IWMCard.position.y + IWMCard.layout.shape.height
+            y: this.gridY(this.pendingSize) + DataCard.unitSize * 1.5
         }
         // end is the top of the "X_IWM"
         const end = {
