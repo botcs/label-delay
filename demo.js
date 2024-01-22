@@ -14,7 +14,9 @@ const clip = svg.append("defs")
     .attr("id", "clip-rounded-rect")
     .append("rect")
 
-
+////////////////////////////////////////
+// BACKEND
+////////////////////////////////////////
 class DataEntry {
     static count = 0;
     constructor(inData, outData, label = UNLABELED) {
@@ -241,6 +243,167 @@ class DataHandler {
 const dataHandler = new DataHandler();
 
 
+
+class Trainer{
+    constructor(dataHandler) {
+        this.model = null;
+        this.dataHandler = dataHandler;
+        this.numIterations = 0;
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+    }
+    
+
+    async initializeModel(numClasses = NUM_CLASSES) {
+        const input = tf.input({
+            shape: [32, 32, 3],
+            dataFormat: 'channelsLast',
+        });
+        const feature = tf.sequential();
+        feature.add(tf.layers.conv2d({
+            inputShape: [32, 32, 3],
+            kernelSize: 5,
+            filters: 128,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 128,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 1,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.flatten());
+        feature.add(tf.layers.dense({
+            units: 64, 
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            activation:'selu'
+        }));
+        feature.add(tf.layers.dense({
+            units: NUM_FEATURES, 
+            kernelInitializer: 'varianceScaling', 
+            kernelRegularizer: 'l1l2',
+            activation:'tanh'
+        }));
+
+        const logit = tf.sequential();
+        logit.add(tf.layers.dense({
+            inputShape: [NUM_FEATURES],
+            units: numClasses, 
+            kernelInitializer: 'varianceScaling', 
+            kernelRegularizer: 'l1l2',
+        }));
+        
+        const feat = feature.apply(input);
+        const pred = logit.apply(feat);
+
+        
+        
+        const model = tf.model({
+            inputs: input, 
+            // outputs: {
+            //     pred: pred,
+            //     feat: feat
+            // }
+            outputs: [pred, feat]
+        });
+        
+        const optimizer = tf.train.sgd(0.01);
+        const noopLoss = (yTrue, yPred) => tf.zeros([1]);
+        await model.compile({
+            optimizer: optimizer,
+            // loss: {
+            //     pred: 'categoricalCrossentropy',
+            //     feat: noopLoss
+            // },
+            loss: ['categoricalCrossentropy', noopLoss],
+            metrics: ['accuracy']
+        });
+
+        // Warm up the model
+        const warmupData = tf.zeros([1, 32, 32, 3]);
+        model.predict(warmupData);
+        warmupData.dispose();
+        this.model = model;
+
+        // Summary
+        console.log(model.summary());
+        return model;
+
+    }
+
+    async trainModel() {
+        // Train the model
+        const optimizer = this.model.optimizer;
+        const lossFunction = tf.losses.softmaxCrossEntropy;
+        const batchSize = 2;
+
+        const indices = [];
+        for (let i = 0; i < batchSize; i++) {
+            const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+            indices.push(idx);
+        }
+        const data = tf.tidy(() => {
+            const input = [];
+            const labels = [];
+            for (let i = 0; i < indices.length; i++) {
+                const dataEntry = dataHandler.memoryEntries[indices[i]];
+                input.push(dataEntry.inData.Tensor);
+                labels.push(parseInt(dataEntry.label));
+            }
+            return {
+                input: tf.concat(input, 0),
+                labels: tf.oneHot(labels, NUM_CLASSES)
+            }
+        });
+        optimizer.minimize(() => {
+            const logits = this.model.predict(data.input)[0];
+            const loss = lossFunction(data.labels, logits);
+            loss.print();
+            return loss;
+        });
+        data.input.dispose();
+        data.labels.dispose();
+
+        this.numIterations++;
+        domHandler.THETA_T.text(this.numIterations)
+            .append("tspan")
+            .attr("dy", "0.5em")
+            .text("=train(");
+        // d3.selectAll("#theta-t").text(this.numIterations);
+
+        // Update all the features
+        tf.tidy(() => {
+            dataHandler.recomputeFeatures(this.model);
+        });
+        await domHandler.renderDataCards();
+        await domHandler.renderSimilarities();
+
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+    }
+}
+const trainer = new Trainer(dataHandler);
+
+////////////////////////////////////////
+// FRONTEND
+////////////////////////////////////////
 class DataCard {
     // A datacard is a visual representation of a data entry
     static unitSize = 100;
@@ -863,11 +1026,9 @@ class DOMHandler {
 const domHandler = new DOMHandler();
 
 
-
-
-function frameToTensor(video) {
+function frameToTensor(source) {
     // Read frame
-    let frame = tf.browser.fromPixels(video)
+    let frame = tf.browser.fromPixels(source)
     
     // Resize
     frame = frame.resizeNearestNeighbor([32, 32]);
@@ -939,7 +1100,7 @@ function captureWebcam() {
     ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, outputSize, outputSize);
 
     const dataURL = canvas.toDataURL('image/png');
-    const dataTensor = frameToTensor(video); // Assuming this is part of your existing code
+    const dataTensor = tf.tidy(() => frameToTensor(video));
     const frame = {
         dataURL: dataURL,
         Tensor: dataTensor
@@ -947,15 +1108,40 @@ function captureWebcam() {
     return frame;
 }
 
-// inData = tf.zeros([1, 32, 32, 3]);
-async function createDataCard(label = UNLABELED) {
+async function loadImage(url) {
+    // Offline replacement of captureWebcam
+    const img = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+    });
+
+    const dataURL = url;
+    const dataTensor = tf.tidy(() => frameToTensor(img));
+
+    const frame = {
+        dataURL: dataURL,
+        Tensor: dataTensor
+    };
+    return frame;
+}
+
+async function createDataCard(label = UNLABELED, url = null) {
     if (domHandler.renderPromise !== null) {
-        return;
+        await domHandler.renderPromise;
+        
+    }
+    let inData;
+    if (url !== null) {
+        inData = await loadImage(url);
     }
 
     // outData = model.predict(inData);
     const dataEntry = tf.tidy(() => {
-        const inData = captureWebcam();
+        if (url === null) {
+            inData = captureWebcam();
+        } 
         const outData = trainer.model.predict(inData.Tensor);
         const dataEntry = new DataEntry(inData, outData, label);
         dataHandler.addDataEntry(dataEntry);
@@ -964,9 +1150,7 @@ async function createDataCard(label = UNLABELED) {
     
     await domHandler.addDataCard(dataEntry);
     console.log(tf.memory().numTensors);
-    
 }
-
 
 
 async function updatePendingDataCard(idx) {
@@ -982,170 +1166,75 @@ async function updatePendingDataCard(idx) {
     await domHandler.pendingCards[idx].updateDOM();
 }
 
-class Trainer{
-    constructor(dataHandler) {
-        this.model = null;
-        this.dataHandler = dataHandler;
-        this.numIterations = 0;
-        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-    }
-    
-
-    async initializeModel(numClasses = NUM_CLASSES) {
-        const input = tf.input({
-            shape: [32, 32, 3],
-            dataFormat: 'channelsLast',
-        });
-        const feature = tf.sequential();
-        feature.add(tf.layers.conv2d({
-            inputShape: [32, 32, 3],
-            kernelSize: 5,
-            filters: 128,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 128,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 1,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.flatten());
-        feature.add(tf.layers.dense({
-            units: 64, 
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            activation:'selu'
-        }));
-        feature.add(tf.layers.dense({
-            units: NUM_FEATURES, 
-            kernelInitializer: 'varianceScaling', 
-            kernelRegularizer: 'l1l2',
-            activation:'tanh'
-        }));
-
-        const logit = tf.sequential();
-        logit.add(tf.layers.dense({
-            inputShape: [NUM_FEATURES],
-            units: numClasses, 
-            kernelInitializer: 'varianceScaling', 
-            kernelRegularizer: 'l1l2',
-        }));
-        
-        const feat = feature.apply(input);
-        const pred = logit.apply(feat);
-
-        
-        
-        const model = tf.model({
-            inputs: input, 
-            // outputs: {
-            //     pred: pred,
-            //     feat: feat
-            // }
-            outputs: [pred, feat]
-        });
-        
-        const noopLoss = (yTrue, yPred) => tf.zeros([1]);
-        await model.compile({
-            optimizer: 'adam',
-            // loss: {
-            //     pred: 'categoricalCrossentropy',
-            //     feat: noopLoss
-            // },
-            loss: ['categoricalCrossentropy', noopLoss],
-            metrics: ['accuracy']
-        });
-
-        // Warm up the model
-        const warmupData = tf.zeros([1, 32, 32, 3]);
-        model.predict(warmupData);
-        warmupData.dispose();
-        this.model = model;
-
-        // Summary
-        console.log(model.summary());
-        return model;
-
-    }
-
-    async trainModel() {
-        // Train the model
-        const optimizer = this.model.optimizer;
-        const lossFunction = tf.losses.softmaxCrossEntropy;
-        const batchSize = 2;
-
-        const indices = [];
-        for (let i = 0; i < batchSize; i++) {
-            const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-            indices.push(idx);
+async function loadImages() {
+    // Load all images from the folder
+    // and create the datacards
+    urls = []
+    for (let i = 0; i < 2; i++) {
+        for (let j = 0; j < 5; j++) {
+            urls.push({
+                url: `demo-pretrain-data/${i}/image${j}.png`,
+                label: i
+            });
         }
-        const data = tf.tidy(() => {
-            const input = [];
-            const labels = [];
-            for (let i = 0; i < indices.length; i++) {
-                const dataEntry = dataHandler.memoryEntries[indices[i]];
-                input.push(dataEntry.inData.Tensor);
-                labels.push(parseInt(dataEntry.label));
-            }
-            return {
-                input: tf.concat(input, 0),
-                labels: tf.oneHot(labels, NUM_CLASSES)
-            }
-        });
-        optimizer.minimize(() => {
-            const logits = this.model.predict(data.input)[0];
-            const loss = lossFunction(data.labels, logits);
-            loss.print();
-            return loss;
-        });
-        data.input.dispose();
-        data.labels.dispose();
-
-        this.numIterations++;
-        domHandler.THETA_T.text(this.numIterations)
-            .append("tspan")
-            .attr("dy", "0.5em")
-            .text("=train(");
-        // d3.selectAll("#theta-t").text(this.numIterations);
-
-        // Update all the features
-        tf.tidy(() => {
-            dataHandler.recomputeFeatures(this.model);
-        });
-        await domHandler.renderDataCards();
-        await domHandler.renderSimilarities();
-
-        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
     }
-}
-const trainer = new Trainer(dataHandler);
+    // swap the middle two images
+    const tmp = urls[5];
+    urls[5] = urls[6];
+    urls[6] = tmp;
 
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        await createDataCard(url.label, url.url);
+    }
+
+}
+
+function downloadAllImagesAsZip() {
+    const zip = new JSZip();
+    const categoryIndices = {};
+
+    dataHandler.memoryEntries.forEach((dataEntry) => {
+        const category = dataEntry.label;
+        // Initialize the category index if not already done
+        if (!(category in categoryIndices)) {
+            categoryIndices[category] = 0;
+        }
+
+        const filename = `image${categoryIndices[category]}.png`;
+        // Assuming dataURL is in the format "data:image/png;base64,..."
+        const imageData = dataEntry.inData.dataURL.split(',')[1];
+
+        // Create a folder for the category if it doesn't exist
+        if (!zip.folder(category)) {
+            zip.folder(category);
+        }
+
+        // Add the image to the appropriate folder
+        zip.folder(category).file(filename, imageData, { base64: true });
+
+        // Increment the index for this category
+        categoryIndices[category]++;
+    });
+
+    zip.generateAsync({ type: 'blob' }).then((content) => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = 'images.zip';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+}
 
 let interval = null;
 // Initialize the webcam on page load
 document.addEventListener('DOMContentLoaded', 
     async () => {
         await Promise.all([
+            trainer.initializeModel(),
+            loadImages(),
             startWebcam(),
-            trainer.initializeModel()
         ]);
         await createDataCard();
         interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
@@ -1159,24 +1248,25 @@ document.addEventListener('visibilitychange', async () => {
             clearInterval(interval);
             interval = null;
 
-            // // Stop the webcam
-            // const stream = video.srcObject;
-            // const tracks = stream.getTracks();
-            // tracks.forEach(function(track) {
-            //     track.stop();
-            // });
-            // video.srcObject = null;
+            // Stop the webcam
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(function(track) {
+                track.stop();
+            });
+            video.srcObject = null;
 
         }
     } else if (document.visibilityState === "visible") {
         if (interval === null) {
-            // await startWebcam();
+            await startWebcam();
             interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
         }
     }
 });
 
-document.addEventListener('keydown', async function(event) {
+
+document.addEventListener('keydown', function(event) {
     let label;
     switch (event.key.toLowerCase()) {
         case 'v':
@@ -1197,9 +1287,8 @@ document.addEventListener('keydown', async function(event) {
         default:
             return; // Do nothing if it's any other key
     }
-    await createDataCard(UNLABELED);
-    dataHandler.pendingEntries[1].label = label;
-    domHandler.pendingCards[1].updateDOM();
-    
+    dataHandler.pendingEntries[0].label = label;
+    domHandler.pendingCards[0].updateDOM();
+    createDataCard(UNLABELED);
     // Handle the output as needed, such as updating the UI or triggering other actions.
 });
