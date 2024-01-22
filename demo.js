@@ -25,7 +25,7 @@ class DataEntry {
         this.pred = tf.variable(tf.squeeze(outData[0]));
 
         // A [NUM_FEATURES] tensor representing the feature vector
-        feat = outData[1];
+        const feat = outData[1];
         this.feat = tf.variable(tf.squeeze(feat.div(feat.norm(2))));
         this.label = label; // A string or number representing the label
         this.id = DataEntry.count;
@@ -46,7 +46,7 @@ class DataEntry {
         this.inData.dataURL = inData.dataURL;
         this.inData.Tensor.assign(inData.Tensor);
         this.pred.assign(tf.squeeze(outData[0]));
-        feat = outData[1];
+        const feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
     }
 }
@@ -189,6 +189,8 @@ class DataHandler {
         // Update the softmax scores
         this.scores.assign(tf.softmax(this.similarities, 1));
     }
+
+
 }
 const dataHandler = new DataHandler();
 
@@ -425,13 +427,14 @@ class DataCard {
 }
 
 
+
 class DOMHandler {
     constructor(
         memorySize = MEMORY_SIZE, 
         pendingSize = PENDING_SIZE, 
         offset = {x:0, y:0},
-        width = 1000, 
-        height = 500
+        boardWidth = 1000, 
+        boardHeight = 500
     ) {
         // the memory entries are the labeled datacards
         // the pending entries are the unlabeled datacards
@@ -442,24 +445,77 @@ class DOMHandler {
         this.memoryCards = [];
         this.pendingCards = [];
         this.offset = offset;
-        this.width = width;
-        this.height = height;
+        this.boardWidth = boardWidth;
+        this.boardHeight = boardHeight;
 
         this.setDOMPositions();
+        this.initialize();
+        this.renderPromise = null;
+        this.similiratyRenderPromise = null;
+    }
+
+    async initialize() {
         this.mainGroup = svg.append("g")
             .attr("id", "DOMHandler")
-            .attr("transform", `translate(${offset.x}, ${offset.y})`);
-        this.mainGroup.append("rect")
-            .attr("fill", "lightgray")
-            .attr("width", width)
-            .attr("height", height);
+            .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
+        
+        // draw the grid
+        const grid = this.mainGroup.append("g")
+        grid.append("g")
+            .attr("id", "horGrid")
+            .selectAll("line")
+            .data(this.gridX.domain())
+            .join("line")
+            .attr("x1", d => this.gridX(d))
+            .attr("x2", d => this.gridX(d))
+            .attr("y1", this.gridY(0))
+            .attr("y2", this.gridY(this.pendingSize))
+            .attr("stroke", "lightgrey")
+            .attr("stroke-width", 1)
+            .attr("stroke-dasharray", "5,5");
+
+        grid.append("g")
+            .attr("id", "verGrid")
+            .selectAll("line")
+            .data(this.gridY.domain())
+            .join("line")
+            .attr("y1", d => this.gridY(d))
+            .attr("y2", d => this.gridY(d))
+            .attr("x1", this.gridX(0))
+            .attr("x2", this.gridX(this.memorySize))
+            .attr("stroke", "lightgrey")
+            .attr("stroke-width", 1)
+            .attr("stroke-dasharray", "5,5");
 
         this.similarityGroup = this.mainGroup.append("g")
             .attr("id", "similarityGroup");
 
-        this.renderPromise = null;
-    }
+        
+        this.X_RND = this.mainGroup.append("text")
+            .attr("id", "X_RND")
+            .style("font-size", "3em")
+            .style("font-text-anchor=", "middle")
+            .style("dominant-baseline", "hanging")
+            .attr("x", this.memoryDOMPositions[Math.floor(this.memorySize / 3 * 1)].x)
+            .attr("y", this.boardHeight + DataCard.unitSize)
+            .text("X");
+        this.X_RND.append("tspan")
+            .attr("dy", "0.5em")
+            .text("RND");
+        this.X_IWM = this.mainGroup.append("text")
+            .attr("id", "X_IWM")
+            .style("font-size", "3em")
+            .style("font-text-anchor=", "middle")
+            .style("dominant-baseline", "hanging")
+            .attr("x", this.memoryDOMPositions[Math.floor(this.memorySize / 3 * 2)].x)
+            .attr("y", this.boardHeight + DataCard.unitSize)
+            .text("X");
+        this.X_IWM.append("tspan")
+            .attr("dy", "0.5em")
+            .text("IWM");
 
+        this.isInitialized = true;
+    }
 
     setDOMPositions(padding = 0.0) {
         // we use a grid layout for the datacards
@@ -481,8 +537,8 @@ class DOMHandler {
         // The grid ends at the right and bottom border
         // therefore we need to subtract 0.5 units on X
         // and 1.5 units on Y because the cards are vertical
-        const endX = this.width - DataCard.unitSize*0.5;
-        const endY = this.height - DataCard.unitSize*1.5;
+        const endX = this.boardWidth - DataCard.unitSize*0.5;
+        const endY = this.boardHeight - DataCard.unitSize*1.5;
 
 
         // We add +1 to accommodate the cards
@@ -514,6 +570,25 @@ class DOMHandler {
             y: this.gridY(this.pendingSize)
         };
     }
+
+    createVertConnector(fromP, toP) {
+        fromP.x = parseInt(fromP.x);
+        fromP.y = parseInt(fromP.y);
+        toP.x = parseInt(toP.x);
+        toP.y = parseInt(toP.y);
+        const path = d3.path();
+        path.moveTo(fromP.x, fromP.y);
+        const sharpness = 0.5;
+        const control1X = fromP.x;
+        const control1Y = fromP.y + sharpness * (toP.y - fromP.y);
+        const control2X = toP.x;
+        const control2Y = toP.y - sharpness * (toP.y - fromP.y);
+
+        // path.quadraticCurveTo(controlX, controlY, toP.x, toP.y);
+        path.bezierCurveTo(control1X, control1Y, control2X, control2Y, toP.x, toP.y);
+        return path.toString();
+    }
+
     async renderSimilarities() {
         if (this.memoryCards.length === 0) {
             return;
@@ -552,11 +627,11 @@ class DOMHandler {
         this.similarityGroup.selectAll("rect")
             .data(scores.flat())
             .join("rect")
-            .transition()
-            .duration(100)
             .attr("x", (d, i) => barX(i))
             .attr("y", (d, i) => barY(d, i)) // Updated y attribute
             .attr("width", barWidth)
+            .transition()
+            .duration(100)
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
             .attr("fill", (d, i) => "#1f77b4")
             .style("opacity", (d, i) => barOpacity(d, i))
@@ -564,6 +639,51 @@ class DOMHandler {
             .style("stroke-width", "2px")
             .attr("rx", 10)
             .attr("ry", 10);
+        
+        // Draw arrows from max similarity to the equation
+        if (this.arrowIWM === undefined) {
+            this.arrowIWM = svg.append("path")
+                .attr("stroke", "red")
+                .attr("stroke-width", 6)
+                .attr("fill", "none");
+        }
+        if (this.arrowRND === undefined) {
+            this.arrowRND = svg.append("path")
+                .attr("stroke", "red")
+                .attr("stroke-width", 6)
+                .attr("fill", "none");
+        }
+
+        const RNDCard = this.memoryCards[trainer.randomIdx];
+        const startRND = {
+            x: RNDCard.position.x + RNDCard.layout.shape.width / 2,
+            y: RNDCard.position.y + RNDCard.layout.shape.height
+        }
+        const endRND = {
+            x: parseInt(this.X_RND.attr("x")),
+            y: parseInt(this.X_RND.attr("y"))
+        }
+        this.arrowRND.transition()
+            .duration(100)
+            .attr("d", this.createVertConnector(startRND, endRND));
+
+
+
+        // start is the bottom of the selected MemoryCard
+        const IWMCard = this.memoryCards[maxIndices[0]];
+        const start = {
+            x: IWMCard.position.x + IWMCard.layout.shape.width / 2,
+            y: IWMCard.position.y + IWMCard.layout.shape.height
+        }
+        // end is the top of the "X_IWM"
+        const end = {
+            x: parseInt(this.X_IWM.attr("x")),
+            y: parseInt(this.X_IWM.attr("y"))
+        }
+        this.arrowIWM.transition()
+            .duration(150)
+            .attr("d", this.createVertConnector(start, end));
+
     }
 
     async addDataCard(dataEntry) {
@@ -649,100 +769,6 @@ const domHandler = new DOMHandler();
 
 
 
-function initializeModel(numClasses = NUM_CLASSES) {
-    const input = tf.input({
-        shape: [32, 32, 3],
-        dataFormat: 'channelsLast',
-    });
-    const feature = tf.sequential();
-    feature.add(tf.layers.conv2d({
-        inputShape: [32, 32, 3],
-        kernelSize: 5,
-        filters: 128,
-        strides: 1,
-        activation: 'selu',
-        kernelInitializer: 'varianceScaling',
-        kernelRegularizer: 'l1l2',
-        padding: 'same',
-    }));
-    feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-    feature.add(tf.layers.conv2d({
-        kernelSize: 3,
-        filters: 128,
-        strides: 1,
-        activation: 'selu',
-        kernelInitializer: 'varianceScaling',
-        kernelRegularizer: 'l1l2',
-        padding: 'same',
-    }));
-    feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-    feature.add(tf.layers.conv2d({
-        kernelSize: 3,
-        filters: 1,
-        strides: 1,
-        activation: 'selu',
-        kernelInitializer: 'varianceScaling',
-        kernelRegularizer: 'l1l2',
-        padding: 'same',
-    }));
-    feature.add(tf.layers.flatten());
-    feature.add(tf.layers.dense({
-        units: 64, 
-        kernelInitializer: 'varianceScaling',
-        kernelRegularizer: 'l1l2',
-        activation:'selu'
-    }));
-    feature.add(tf.layers.dense({
-        units: NUM_FEATURES, 
-        kernelInitializer: 'varianceScaling', 
-        kernelRegularizer: 'l1l2',
-        activation:'tanh'
-    }));
-
-    const logit = tf.sequential();
-    logit.add(tf.layers.dense({
-        inputShape: [NUM_FEATURES],
-        units: numClasses, 
-        kernelInitializer: 'varianceScaling', 
-        kernelRegularizer: 'l1l2',
-    }));
-    
-    feat = feature.apply(input);
-    pred = logit.apply(feat);
-
-    
-    
-    const model = tf.model({
-        inputs: input, 
-        // outputs: {
-        //     pred: pred,
-        //     feat: feat
-        // }
-        outputs: [pred, feat]
-    });
-    
-    const noopLoss = (yTrue, yPred) => tf.zeros([1]);
-    model.compile({
-        optimizer: 'adam',
-        // loss: {
-        //     pred: 'categoricalCrossentropy',
-        //     feat: noopLoss
-        // },
-        loss: ['categoricalCrossentropy', noopLoss],
-        metrics: ['accuracy']
-    });
-
-    // Warm up the model
-    const warmupData = tf.zeros([1, 32, 32, 3]);
-    model.predict(warmupData);
-    warmupData.dispose();
-
-    // Summary
-    console.log(model.summary());
-
-    return model;
-
-}
 
 function frameToTensor(video) {
     // Read frame
@@ -835,7 +861,7 @@ async function createDataCard(label = UNLABELED) {
     // outData = model.predict(inData);
     const dataEntry = tf.tidy(() => {
         const inData = captureWebcam();
-        const outData = model.predict(inData.Tensor);
+        const outData = trainer.model.predict(inData.Tensor);
         const dataEntry = new DataEntry(inData, outData, label);
         dataHandler.addDataEntry(dataEntry);
         return dataEntry;
@@ -853,7 +879,7 @@ async function updatePendingDataCard(idx) {
     tf.tidy(() => {
         const dataEntry = dataHandler.pendingEntries[idx];
         const inData = captureWebcam();
-        const outData = model.predict(inData.Tensor);
+        const outData = trainer.model.predict(inData.Tensor);
         dataEntry.updateData(inData, outData);
         dataHandler.updateSimilaritiesRow(idx);
     });
@@ -861,48 +887,160 @@ async function updatePendingDataCard(idx) {
     await domHandler.pendingCards[idx].updateDOM();
 }
 
-
-async function trainModel() {
-    // Train the model
-    const optimizer = model.optimizer;
-    const lossFunction = tf.losses.softmaxCrossEntropy;
-    const batchSize = 2;
-
-    const indices = [];
-    for (let i = 0; i < batchSize; i++) {
-        const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-        indices.push(idx);
+class Trainer{
+    constructor(dataHandler) {
+        this.model = null;
+        this.dataHandler = dataHandler;
+        this.numIterations = 0;
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
     }
-    const data = tf.tidy(() => {
-        const data = [];
-        for (let i = 0; i < indices.length; i++) {
-            const dataEntry = dataHandler.memoryEntries[indices[i]];
-            data.push(dataEntry.inData.Tensor);
+    
+
+    async initializeModel(numClasses = NUM_CLASSES) {
+        const input = tf.input({
+            shape: [32, 32, 3],
+            dataFormat: 'channelsLast',
+        });
+        const feature = tf.sequential();
+        feature.add(tf.layers.conv2d({
+            inputShape: [32, 32, 3],
+            kernelSize: 5,
+            filters: 128,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 128,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 1,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.flatten());
+        feature.add(tf.layers.dense({
+            units: 64, 
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            activation:'selu'
+        }));
+        feature.add(tf.layers.dense({
+            units: NUM_FEATURES, 
+            kernelInitializer: 'varianceScaling', 
+            kernelRegularizer: 'l1l2',
+            activation:'tanh'
+        }));
+
+        const logit = tf.sequential();
+        logit.add(tf.layers.dense({
+            inputShape: [NUM_FEATURES],
+            units: numClasses, 
+            kernelInitializer: 'varianceScaling', 
+            kernelRegularizer: 'l1l2',
+        }));
+        
+        const feat = feature.apply(input);
+        const pred = logit.apply(feat);
+
+        
+        
+        const model = tf.model({
+            inputs: input, 
+            // outputs: {
+            //     pred: pred,
+            //     feat: feat
+            // }
+            outputs: [pred, feat]
+        });
+        
+        const noopLoss = (yTrue, yPred) => tf.zeros([1]);
+        await model.compile({
+            optimizer: 'adam',
+            // loss: {
+            //     pred: 'categoricalCrossentropy',
+            //     feat: noopLoss
+            // },
+            loss: ['categoricalCrossentropy', noopLoss],
+            metrics: ['accuracy']
+        });
+
+        // Warm up the model
+        const warmupData = tf.zeros([1, 32, 32, 3]);
+        model.predict(warmupData);
+        warmupData.dispose();
+        this.model = model;
+
+        // Summary
+        console.log(model.summary());
+        return model;
+
+    }
+
+    async trainModel() {
+        // Train the model
+        const optimizer = this.model.optimizer;
+        const lossFunction = tf.losses.softmaxCrossEntropy;
+        const batchSize = 2;
+
+        const indices = [];
+        for (let i = 0; i < batchSize; i++) {
+            const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+            indices.push(idx);
         }
-        return tf.concat(data, 0);
-    });
-    const labels = tf.tidy(() => {
-        const labels = [];
-        for (let i = 0; i < indices.length; i++) {
-            const dataEntry = dataHandler.memoryEntries[indices[i]];
-            labels.push(parseInt(dataEntry.label));
-        }
-        return tf.oneHot(labels, NUM_CLASSES);
-    });
-    const loss = optimizer.minimize(() => {
-        const logits = model.predict(data)[0];
-        const loss = lossFunction(labels, logits);
-        loss.print();
-        return loss;
-    });
-    console.log(loss);
+        const data = tf.tidy(() => {
+            const input = [];
+            const labels = [];
+            for (let i = 0; i < indices.length; i++) {
+                const dataEntry = dataHandler.memoryEntries[indices[i]];
+                input.push(dataEntry.inData.Tensor);
+                labels.push(parseInt(dataEntry.label));
+            }
+            return {
+                input: tf.concat(input, 0),
+                labels: tf.oneHot(labels, NUM_CLASSES)
+            }
+        });
+        const loss = optimizer.minimize(() => {
+            const logits = this.model.predict(data.input)[0];
+            const loss = lossFunction(data.labels, logits);
+            loss.print();
+            return loss;
+        });
+        data.input.dispose();
+        data.labels.dispose();
+
+        d3.selectAll("#theta-t-1").text(this.numIterations);
+        this.numIterations++;
+        d3.selectAll("#theta-t").text(this.numIterations);
+
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+    }
 }
+const trainer = new Trainer(dataHandler);
+
 
 // Initialize the webcam on page load
 document.addEventListener('DOMContentLoaded', 
     async () => {
-        await startWebcam();
-        model = initializeModel();
+        await Promise.all([
+            startWebcam(),
+            trainer.initializeModel()
+        ]);
         await createDataCard();
         setInterval(async () => {updatePendingDataCard(0);}, 33);
     }
@@ -939,6 +1077,9 @@ document.addEventListener('keydown', async function(event) {
         case 'm':
             label = '2';
             break;
+        case 't':
+            trainer.trainModel();
+            return;
         default:
             return; // Do nothing if it's any other key
     }
