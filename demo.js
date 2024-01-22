@@ -1,5 +1,5 @@
 const PENDING_SIZE = 3;
-const MEMORY_SIZE = 8;
+const MEMORY_SIZE = 13;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -62,6 +62,7 @@ class DataHandler {
 
         // Use this to store the cosine similarities
         this.similarities = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
+
 
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
@@ -190,7 +191,52 @@ class DataHandler {
         this.scores.assign(tf.softmax(this.similarities, 1));
     }
 
+    updateSimilarities() {
+        // Full update of the similarities
+        const keyEntries = this.memoryEntries;
+        const queryEntries = this.pendingEntries;
+        const keyFeats = [];
+        const queryFeats = [];
+        for (let i = 0; i < keyEntries.length; i++) {
+            keyFeats.push(keyEntries[i].feat);
+        }
+        for (let i = 0; i < queryEntries.length; i++) {
+            queryFeats.push(queryEntries[i].feat);
+        }
+        const keyFeatsTensor = tf.stack(keyFeats);
+        const queryFeatsTensor = tf.stack(queryFeats);
+        const similarities = tf.dot(queryFeatsTensor, keyFeatsTensor.transpose());
 
+        // pad the similarities with zeros
+        const padLength = this.memorySize - keyEntries.length;
+        const pad = tf.zeros([queryEntries.length, padLength]);
+        this.similarities.assign(tf.concat([similarities, pad], 1));
+
+        this.scores.assign(tf.softmax(this.similarities, 1));
+    }
+
+    recomputeFeatures(model) {
+        // Recompute the features of the pending entries
+        for (let i = 0; i < this.pendingEntries.length; i++) {
+            const dataEntry = this.pendingEntries[i];
+            const inData = dataEntry.inData;
+            const outData = model.predict(inData.Tensor);
+            dataEntry.pred.assign(tf.squeeze(outData[0]));
+            const feat = outData[1];
+            dataEntry.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
+        }
+        // Recompute the features of the memory entries
+        for (let i = 0; i < this.memoryEntries.length; i++) {
+            const dataEntry = this.memoryEntries[i];
+            const inData = dataEntry.inData;
+            const outData = model.predict(inData.Tensor);
+            dataEntry.pred.assign(tf.squeeze(outData[0]));
+            const feat = outData[1];
+            dataEntry.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
+        }
+
+        this.updateSimilarities();
+    }
 }
 const dataHandler = new DataHandler();
 
@@ -336,7 +382,10 @@ class DataCard {
         this.renderPromise = null;
     }
     async _updateDOM() {
-        
+        // Update label
+        // remove previous label
+        this.mainGroup.attr("class", "datacard category-" + this.dataEntry.label);
+
         // Update the image and the feature vector
         this.imageGroup.select("image")
             .attr("xlink:href", this.dataEntry.inData.dataURL);
@@ -433,7 +482,7 @@ class DOMHandler {
         memorySize = MEMORY_SIZE, 
         pendingSize = PENDING_SIZE, 
         offset = {x:0, y:0},
-        boardWidth = 1000, 
+        boardWidth = 1500, 
         boardHeight = 500
     ) {
         // the memory entries are the labeled datacards
@@ -491,30 +540,50 @@ class DOMHandler {
             .attr("id", "similarityGroup");
 
         
+
+        this.THETA_T = this.mainGroup.append("text")
+            .attr("id", "THETA")
+            .style("font-size", "3em")
+            .style("font-text-anchor=", "middle")
+            .style("dominant-baseline", "hanging")
+            .attr("x", this.boardWidth*0.25)
+            .attr("y", this.boardHeight + DataCard.unitSize)
+            .text("θ")
+            .append("tspan")
+            .attr("dy", "-0.5em")
+            .text("0");
+        this.THETA_T.append("tspan")
+            .attr("dy", "0.5em")
+            .text("=train(");
+
         this.X_RND = this.mainGroup.append("text")
             .attr("id", "X_RND")
             .style("font-size", "3em")
             .style("font-text-anchor=", "middle")
             .style("dominant-baseline", "hanging")
-            .attr("x", this.memoryDOMPositions[Math.floor(this.memorySize / 3 * 1)].x)
+            .attr("x", this.boardWidth*0.5)
             .attr("y", this.boardHeight + DataCard.unitSize)
             .text("X");
         this.X_RND.append("tspan")
             .attr("dy", "0.5em")
-            .text("RND");
+            .text("RND")
+            .append("tspan")
+            .attr("dy", "-0.5em")
+            .text(",");
         this.X_IWM = this.mainGroup.append("text")
             .attr("id", "X_IWM")
             .style("font-size", "3em")
             .style("font-text-anchor=", "middle")
             .style("dominant-baseline", "hanging")
-            .attr("x", this.memoryDOMPositions[Math.floor(this.memorySize / 3 * 2)].x)
+            .attr("x", this.boardWidth*0.7)
             .attr("y", this.boardHeight + DataCard.unitSize)
             .text("X");
         this.X_IWM.append("tspan")
             .attr("dy", "0.5em")
-            .text("IWM");
-
-        this.isInitialized = true;
+            .text("IWM")
+            .append("tspan")
+            .attr("dy", "-0.5em")
+            .text(")");
     }
 
     setDOMPositions(padding = 0.0) {
@@ -589,11 +658,34 @@ class DOMHandler {
         return path.toString();
     }
 
+    async renderDataCards() {
+        // Re-renders all dataCards in the DOM
+        // This is used when the model is trained
+        // and the features are re-computed
+
+        const renderPromises = [];
+        // Update the pending entries
+        for (let i = 0; i < this.pendingCards.length; i++) {
+            const p = this.pendingCards[i].updateDOM();
+            renderPromises.push(p);
+        }
+        // Update the memory entries
+        for (let i = 0; i < this.memoryCards.length; i++) {
+            const p = this.memoryCards[i].updateDOM();
+            renderPromises.push(p);
+        }
+        await Promise.all(renderPromises);
+    }
+
     async renderSimilarities() {
         if (this.memoryCards.length === 0) {
             return;
         }
-        const scores = await dataHandler.scores.array();
+        let scores = await dataHandler.scores.array();
+
+        // Trim cols to the number of memory entries
+        scores = scores.map(row => row.slice(0, this.memoryCards.length));
+
         const numRows = scores.length;
         const numCols = scores[0].length;
         const maxScores = scores.map(row => d3.max(row)); // Maximum score per row
@@ -627,11 +719,11 @@ class DOMHandler {
         this.similarityGroup.selectAll("rect")
             .data(scores.flat())
             .join("rect")
-            .attr("x", (d, i) => barX(i))
-            .attr("y", (d, i) => barY(d, i)) // Updated y attribute
             .attr("width", barWidth)
             .transition()
             .duration(100)
+            .attr("x", (d, i) => barX(i))
+            .attr("y", (d, i) => barY(d, i)) // Updated y attribute
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
             .attr("fill", (d, i) => "#1f77b4")
             .style("opacity", (d, i) => barOpacity(d, i))
@@ -664,25 +756,28 @@ class DOMHandler {
             y: parseInt(this.X_RND.attr("y"))
         }
         this.arrowRND.transition()
-            .duration(100)
+            .duration(150)
             .attr("d", this.createVertConnector(startRND, endRND));
 
 
 
         // start is the bottom of the selected MemoryCard
-        const IWMCard = this.memoryCards[maxIndices[0]];
-        const start = {
-            x: IWMCard.position.x + IWMCard.layout.shape.width / 2,
-            y: this.gridY(this.pendingSize) + DataCard.unitSize * 1.5
+        const IWMIdx = d3.min([maxIndices[0], this.memorySize - 1]);
+        const IWMCard = this.memoryCards[IWMIdx];
+        if (IWMCard !== undefined) {
+            const start = {
+                x: IWMCard.position.x + IWMCard.layout.shape.width / 2,
+                y: this.gridY(this.pendingSize) + DataCard.unitSize * 1.5
+            }
+            // end is the top of the "X_IWM"
+            const end = {
+                x: parseInt(this.X_IWM.attr("x")),
+                y: parseInt(this.X_IWM.attr("y"))
+            }
+            this.arrowIWM.transition()
+                .duration(100)
+                .attr("d", this.createVertConnector(start, end));
         }
-        // end is the top of the "X_IWM"
-        const end = {
-            x: parseInt(this.X_IWM.attr("x")),
-            y: parseInt(this.X_IWM.attr("y"))
-        }
-        this.arrowIWM.transition()
-            .duration(150)
-            .attr("d", this.createVertConnector(start, end));
 
     }
 
@@ -1015,7 +1110,7 @@ class Trainer{
                 labels: tf.oneHot(labels, NUM_CLASSES)
             }
         });
-        const loss = optimizer.minimize(() => {
+        optimizer.minimize(() => {
             const logits = this.model.predict(data.input)[0];
             const loss = lossFunction(data.labels, logits);
             loss.print();
@@ -1024,9 +1119,19 @@ class Trainer{
         data.input.dispose();
         data.labels.dispose();
 
-        d3.selectAll("#theta-t-1").text(this.numIterations);
         this.numIterations++;
-        d3.selectAll("#theta-t").text(this.numIterations);
+        domHandler.THETA_T.text(this.numIterations)
+            .append("tspan")
+            .attr("dy", "0.5em")
+            .text("=train(");
+        // d3.selectAll("#theta-t").text(this.numIterations);
+
+        // Update all the features
+        tf.tidy(() => {
+            dataHandler.recomputeFeatures(this.model);
+        });
+        await domHandler.renderDataCards();
+        await domHandler.renderSimilarities();
 
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
     }
@@ -1034,6 +1139,7 @@ class Trainer{
 const trainer = new Trainer(dataHandler);
 
 
+let interval = null;
 // Initialize the webcam on page load
 document.addEventListener('DOMContentLoaded', 
     async () => {
@@ -1042,26 +1148,34 @@ document.addEventListener('DOMContentLoaded',
             trainer.initializeModel()
         ]);
         await createDataCard();
-        setInterval(async () => {updatePendingDataCard(0);}, 33);
+        interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
     }
 );
 
-// Periodically update the last data entry
+// stop the setInterval and webcam when the user switches tabs
+document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) {
+        if (interval !== null) {
+            clearInterval(interval);
+            interval = null;
 
+            // // Stop the webcam
+            // const stream = video.srcObject;
+            // const tracks = stream.getTracks();
+            // tracks.forEach(function(track) {
+            //     track.stop();
+            // });
+            // video.srcObject = null;
 
-// // When the user clicks on the "Capture" button create a data entry
-// dataEntries = [];
-// document.getElementById('capture').addEventListener('click', () => {
-//     const dataEntry = new DataEntry(captureWebcam());
-//     dataEntries.push(dataEntry);
-//     console.log(dataEntries);
-//     d3.select('#data-cards')
-//         .selectAll('.datacard')
-//         .data(dataEntries)
-//         .join('div')
-//         .attr('class', 'datacard')
-//         .html(d => `<img src="${d.inData.dataURL}" />`);
-// });
+        }
+    } else if (document.visibilityState === "visible") {
+        if (interval === null) {
+            // await startWebcam();
+            interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
+        }
+    }
+});
+
 document.addEventListener('keydown', async function(event) {
     let label;
     switch (event.key.toLowerCase()) {
@@ -1083,7 +1197,9 @@ document.addEventListener('keydown', async function(event) {
         default:
             return; // Do nothing if it's any other key
     }
-    await createDataCard(label);
+    await createDataCard(UNLABELED);
+    dataHandler.pendingEntries[1].label = label;
+    domHandler.pendingCards[1].updateDOM();
     
     // Handle the output as needed, such as updating the UI or triggering other actions.
 });

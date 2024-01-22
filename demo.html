@@ -52,9 +52,15 @@
             stroke-width: 2px;
         }
 
-        /* body {
+        body {
             font-family: 'EB Garamond', serif;
-        } */
+        }
+
+        #svg-container {
+            width: 90%;
+            height: 90%;
+            margin: auto;
+        }
     </style>
     <script src = "https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
@@ -62,12 +68,12 @@
 <body>
     <h1>Label Delay Demo (Work in Progress)</h1>
     <div id="svg-container">
-        <svg id="main" viewBox="0 0 1000 700"></svg>
+        <svg id="main" viewBox="0 0 1500 700"></svg>
     </div>
-    <div id="eq" style="text-align: center; vertical-align: middle">
+    <!-- <div id="eq" style="text-align: center; vertical-align: middle">
         
         θ<sup id="theta-t">t</sup> = θ<sup id="theta-t-1">t-1</sup> - ∇<sub>θ<sup id="theta-t-1">t-1</sup></sub><text style="font-size: 1.6em">[</text> L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-rnd">RND</sub>), Y<sub>RND</sub>) + L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-iwm">IWM</sub>), Y<sub>IWM</sub>)<text style="font-size: 1.6em">]</text>
-    </div>
+    </div> -->
     <div id="video-container" style="visibility: hidden;">
         <video id="webcam" autoplay></video>
         <canvas id="aux-canvas" style="display: none;"></canvas>
