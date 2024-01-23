@@ -914,6 +914,16 @@ class DOMHandler {
         if (this.similarityGroup.selectAll("rect").size() < scores.flat().length) {
             duration = 0;
         }
+
+        function color(d, i) {
+            if (i % numCols === maxIndices[Math.floor(i / numCols)]) {
+                const categoryColors = ["#f9cb9c", "#a4c2f4", "#b6d7a8"];
+                const label = dataHandler.memoryEntries[i % numCols].label;
+                return categoryColors[label];
+            }
+            return "#c5c5c3";
+        }
+
         this.similarityGroup.selectAll("rect")
             .data(scores.flat())
             .join("rect")
@@ -923,10 +933,10 @@ class DOMHandler {
             .attr("x", (d, i) => barX(i))
             .attr("y", (d, i) => barY(d, i)) // Updated y attribute
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
-            .attr("fill", (d, i) => "#1f77b4")
+            .attr("fill", (d, i) => color(d, i))
             .style("opacity", (d, i) => barOpacity(d, i))
-            .style("stroke", "#13496f")
-            .style("stroke-width", "2px")
+            // .style("stroke", "#797979")
+            // .style("stroke-width", "2px")
             .attr("rx", 10)
             .attr("ry", 10);
         
