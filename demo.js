@@ -4,6 +4,20 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
 
+////////////////////////////////////////
+// Machine Learning params
+////////////////////////////////////////
+const LR = 0.005;
+const MOMENTUM = 0.0;
+const OPTIMIZER = tf.train.sgd(LR);
+// const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
+// const OPTIMIZER = tf.train.adam(LR);
+const IMAGE_SIZE = 32;
+const IMAGE_CHANNELS = 3;
+const ARCHITECTURE = "cnn";
+
+
+
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('aux-canvas');
 const svg = d3.select("#main")
@@ -249,118 +263,43 @@ class Trainer{
         this.model = null;
         this.dataHandler = dataHandler;
         this.numIterations = 0;
-        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
         this.seed = 42;
+        this.prevLabel = null;
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
     }
     
 
-    async initializeModel(numClasses = NUM_CLASSES) {
+    async initializeModel() {
         Math.seedrandom('constant');
-        const input = tf.input({
-            shape: [32, 32, 3],
-            dataFormat: 'channelsLast',
+        const backboneFactory = {
+            "resnet18": resNet18,
+            "mobilenetv2": mobileNetV2,
+            "cnn": CNN
+        }[ARCHITECTURE];
+        const model = tf.tidy(() => {
+            const backbone = backboneFactory([IMAGE_SIZE, IMAGE_SIZE, IMAGE_CHANNELS]);
+            const input = backbone.input
+            const proj = tf.layers.dense({
+                units: NUM_FEATURES,
+                activation: "tanh",
+                kernelInitializer: "varianceScaling",
+                kernelRegularizer: "l1l2",
+            }).apply(backbone.output);
+            const logit = tf.layers.dense({units: NUM_CLASSES}).apply(proj);
+            
+            return tf.model({
+                inputs: input, 
+                outputs: [logit, proj]
+            });
         });
-        const feature = tf.sequential();
-        feature.add(tf.layers.conv2d({
-            inputShape: [32, 32, 3],
-            kernelSize: 5,
-            filters: 32,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 128,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 128,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 128,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 128,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
-        feature.add(tf.layers.conv2d({
-            kernelSize: 3,
-            filters: 64,
-            strides: 1,
-            activation: 'selu',
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            padding: 'same',
-        }));
-        feature.add(tf.layers.flatten());
-        feature.add(tf.layers.dense({
-            units: 64, 
-            kernelInitializer: 'varianceScaling',
-            kernelRegularizer: 'l1l2',
-            activation:'selu'
-        }));
-        feature.add(tf.layers.dense({
-            units: NUM_FEATURES, 
-            kernelInitializer: 'varianceScaling', 
-            kernelRegularizer: 'l1l2',
-            activation:'tanh'
-        }));
-
-        const logit = tf.sequential();
-        logit.add(tf.layers.dense({
-            inputShape: [NUM_FEATURES],
-            units: numClasses, 
-            kernelInitializer: 'varianceScaling', 
-            kernelRegularizer: 'l1l2',
-        }));
-        
-        const feat = feature.apply(input);
-        const pred = logit.apply(feat);
 
         
         
-        const model = tf.model({
-            inputs: input, 
-            // outputs: {
-            //     pred: pred,
-            //     feat: feat
-            // }
-            outputs: [pred, feat]
-        });
         
-        const optimizer = tf.train.sgd(0.005);
+        // const optimizer = tf.train.sgd(0.005);
         const noopLoss = (yTrue, yPred) => tf.zeros([1]);
         await model.compile({
-            optimizer: optimizer,
+            optimizer: OPTIMIZER,
             // loss: {
             //     pred: 'categoricalCrossentropy',
             //     feat: noopLoss
@@ -374,9 +313,9 @@ class Trainer{
         const labels = tf.oneHot(tf.tensor1d([0,0,1,1,2,2], 'int32'), NUM_CLASSES);
         let logits;
         let loss;
-        await optimizer.minimize(() => {
+        await OPTIMIZER.minimize(() => {
             logits = model.predict(warmupData)[0];
-            loss = tf.losses.softmaxCrossEntropy(labels, logits);
+            loss = tf.losses.softmaxCrossEntropy(labels, logits).mul(0);
             return loss;
         });
 
@@ -401,10 +340,33 @@ class Trainer{
         const batchSize = 2;
 
         const indices = [];
-        for (let i = 0; i < batchSize; i++) {
-            const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-            indices.push(idx);
+        // for (let i = 0; i < batchSize; i++) {
+        //     const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        //     indices.push(idx);
+        // }
+        // let randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        // while (this.prevLabel === dataHandler.memoryEntries[randomIdx].label) {
+        //     randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        // }
+
+        // find memory samples that are not the same as the previous label
+        const availableIndices = [];
+        for (let i = 0; i < dataHandler.memoryEntries.length; i++) {
+            if (this.prevLabel !== dataHandler.memoryEntries[i].label) {
+                availableIndices.push(i);
+            }
         }
+        const randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+        this.prevLabel = dataHandler.memoryEntries[randomIdx].label;
+        this.randomIdx = randomIdx;
+        indices.push(randomIdx);
+        
+
+        // Read the IWM index from DataHandler
+        const iwmIdx = dataHandler.scores.argMax(1).dataSync()[0];
+        console.log(`randomIdx: ${randomIdx}, iwmIdx: ${iwmIdx}`);
+        indices.push(iwmIdx);
+        
         const data = tf.tidy(() => {
             const input = [];
             const labels = [];
@@ -440,8 +402,6 @@ class Trainer{
         });
         await domHandler.renderDataCards();
         await domHandler.renderSimilarities();
-
-        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
     }
 }
 const trainer = new Trainer(dataHandler);
