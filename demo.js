@@ -250,10 +250,12 @@ class Trainer{
         this.dataHandler = dataHandler;
         this.numIterations = 0;
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        this.seed = 42;
     }
     
 
     async initializeModel(numClasses = NUM_CLASSES) {
+        Math.seedrandom('constant');
         const input = tf.input({
             shape: [32, 32, 3],
             dataFormat: 'channelsLast',
@@ -337,19 +339,32 @@ class Trainer{
             metrics: ['accuracy']
         });
 
-        // Warm up the model
-        const warmupData = tf.zeros([1, 32, 32, 3]);
-        model.predict(warmupData);
+        // Warm up the model by training it once
+        const warmupData = tf.randomNormal([6, 32, 32, 3]);
+        const labels = tf.oneHot(tf.tensor1d([0,0,1,1,2,2], 'int32'), NUM_CLASSES);
+        let logits;
+        let loss;
+        await optimizer.minimize(() => {
+            logits = model.predict(warmupData)[0];
+            loss = tf.losses.softmaxCrossEntropy(labels, logits);
+            return loss;
+        });
+
+        // clean up the tensors
         warmupData.dispose();
-        this.model = model;
+        logits.dispose();
+        labels.dispose();
+        loss.dispose();
 
         // Summary
         console.log(model.summary());
-        return model;
-
+        this.model = model;
     }
 
     async trainModel() {
+        // Add an unlabeled entry to the pending entries
+        await createDataCard(UNLABELED);
+
         // Train the model
         const optimizer = this.model.optimizer;
         const lossFunction = tf.losses.softmaxCrossEntropy;
@@ -663,7 +678,6 @@ class DOMHandler {
         this.setDOMPositions();
         this.initialize();
         this.renderPromise = null;
-        this.similiratyRenderPromise = null;
     }
 
     async initialize() {
@@ -876,15 +890,20 @@ class DOMHandler {
             if (i % numCols === maxIndices[Math.floor(i / numCols)]) {
                 return 1.0;
             }
-            return .8;
+            return .69;
         }
     
+        // find out if new values are added
+        let duration = 33;
+        if (this.similarityGroup.selectAll("rect").size() < scores.flat().length) {
+            duration = 0;
+        }
         this.similarityGroup.selectAll("rect")
             .data(scores.flat())
             .join("rect")
             .attr("width", barWidth)
             .transition()
-            .duration(100)
+            .duration(duration)
             .attr("x", (d, i) => barX(i))
             .attr("y", (d, i) => barY(d, i)) // Updated y attribute
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
@@ -1169,7 +1188,7 @@ async function updatePendingDataCard(idx) {
 async function loadImages() {
     // Load all images from the folder
     // and create the datacards
-    urls = []
+    const urls = []
     for (let i = 0; i < 2; i++) {
         for (let j = 0; j < 5; j++) {
             urls.push({
@@ -1178,10 +1197,11 @@ async function loadImages() {
             });
         }
     }
-    // swap the middle two images
-    const tmp = urls[5];
-    urls[5] = urls[6];
-    urls[6] = tmp;
+    // swap the first and the last image
+    const tmp = urls[0];
+    urls[0] = urls[urls.length - 1];
+    urls[urls.length - 1] = tmp;
+
 
     for (let i = 0; i < urls.length; i++) {
         const url = urls[i];
@@ -1237,6 +1257,20 @@ document.addEventListener('DOMContentLoaded',
             startWebcam(),
         ]);
         await createDataCard();
+
+        // Connect the buttons
+        document.getElementById("addCategory0")
+            .addEventListener("click", () => createDataCard('0'));
+        document.getElementById("addCategory1")
+            .addEventListener("click", () => createDataCard('1'));
+        document.getElementById("addCategory2")
+            .addEventListener("click", () => createDataCard('2'));
+        document.getElementById("trainModel")
+            .addEventListener("click", () => trainer.trainModel());
+        document.getElementById("saveImages")
+            .addEventListener("click", downloadAllImagesAsZip);
+
+        // Start the interval to update the pending datacard
         interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
     }
 );
