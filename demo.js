@@ -264,6 +264,26 @@ class Trainer{
         feature.add(tf.layers.conv2d({
             inputShape: [32, 32, 3],
             kernelSize: 5,
+            filters: 32,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 128,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
             filters: 128,
             strides: 1,
             activation: 'selu',
@@ -284,7 +304,17 @@ class Trainer{
         feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
         feature.add(tf.layers.conv2d({
             kernelSize: 3,
-            filters: 1,
+            filters: 128,
+            strides: 1,
+            activation: 'selu',
+            kernelInitializer: 'varianceScaling',
+            kernelRegularizer: 'l1l2',
+            padding: 'same',
+        }));
+        feature.add(tf.layers.maxPooling2d({poolSize: [2, 2], strides: [2, 2]}));
+        feature.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 64,
             strides: 1,
             activation: 'selu',
             kernelInitializer: 'varianceScaling',
@@ -327,7 +357,7 @@ class Trainer{
             outputs: [pred, feat]
         });
         
-        const optimizer = tf.train.sgd(0.01);
+        const optimizer = tf.train.sgd(0.005);
         const noopLoss = (yTrue, yPred) => tf.zeros([1]);
         await model.compile({
             optimizer: optimizer,
@@ -675,12 +705,12 @@ class DOMHandler {
         this.boardWidth = boardWidth;
         this.boardHeight = boardHeight;
 
-        this.setDOMPositions();
         this.initialize();
         this.renderPromise = null;
     }
 
     async initialize() {
+        this.setDOMPositions();
         this.mainGroup = svg.append("g")
             .attr("id", "DOMHandler")
             .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
@@ -692,10 +722,10 @@ class DOMHandler {
             .selectAll("line")
             .data(this.gridX.domain())
             .join("line")
-            .attr("x1", d => this.gridX(d))
-            .attr("x2", d => this.gridX(d))
-            .attr("y1", this.gridY(0))
-            .attr("y2", this.gridY(this.pendingSize))
+            .attr("x1", d => this.gridLineX(d))
+            .attr("x2", d => this.gridLineX(d))
+            .attr("y1", this.gridLineY(0))
+            .attr("y2", this.gridLineY(this.pendingSize))
             .attr("stroke", "lightgrey")
             .attr("stroke-width", 1)
             .attr("stroke-dasharray", "5,5");
@@ -705,25 +735,48 @@ class DOMHandler {
             .selectAll("line")
             .data(this.gridY.domain())
             .join("line")
-            .attr("y1", d => this.gridY(d))
-            .attr("y2", d => this.gridY(d))
-            .attr("x1", this.gridX(0))
-            .attr("x2", this.gridX(this.memorySize))
+            .attr("y1", d => this.gridLineY(d))
+            .attr("y2", d => this.gridLineY(d))
+            .attr("x1", this.gridLineX(0))
+            .attr("x2", this.gridLineX(this.memorySize))
             .attr("stroke", "lightgrey")
             .attr("stroke-width", 1)
             .attr("stroke-dasharray", "5,5");
 
-        this.similarityGroup = this.mainGroup.append("g")
-            .attr("id", "similarityGroup");
+
+        this.legendGroup = this.mainGroup.append("g")
+            .attr("id", "legendGroup");
+
+        this.legendGroup.append("text")
+            .text("Pending Entries")
+            .attr("x", this.gridX(0) - DataCard.unitSize*.5)
+            .attr("y", this.gridY(this.pendingSize) - DataCard.unitSize*.45)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "hanging")
+            .attr("font-size", "1.5em")
+            .attr("fill", "grey");
+
+        this.legendGroup.append("text")
+            .text("Memory Buffer")
+            .attr("x", this.gridX(0) + DataCard.unitSize*.45)
+            .attr("y", this.gridY(this.pendingSize) + DataCard.unitSize*.5)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "alphabetic")
+            .attr("font-size", "1.5em")
+            .attr("transform", `rotate(-90 ${this.gridX(0) + DataCard.unitSize*.45} ${this.gridY(this.pendingSize) + DataCard.unitSize*.5})`)
+            .attr("fill", "grey");
 
         
+
+        this.similarityGroup = this.mainGroup.append("g")
+            .attr("id", "similarityGroup");
 
         this.THETA_T = this.mainGroup.append("text")
             .attr("id", "THETA")
             .style("font-size", "3em")
-            .style("font-text-anchor=", "middle")
+            .style("text-anchor", "middle")
             .style("dominant-baseline", "hanging")
-            .attr("x", this.boardWidth*0.25)
+            .attr("x", this.boardWidth*0.3)
             .attr("y", this.boardHeight + DataCard.unitSize)
             .text("θ")
             .append("tspan")
@@ -736,7 +789,7 @@ class DOMHandler {
         this.X_RND = this.mainGroup.append("text")
             .attr("id", "X_RND")
             .style("font-size", "3em")
-            .style("font-text-anchor=", "middle")
+            .style("text-anchor", "middle")
             .style("dominant-baseline", "hanging")
             .attr("x", this.boardWidth*0.5)
             .attr("y", this.boardHeight + DataCard.unitSize)
@@ -750,7 +803,7 @@ class DOMHandler {
         this.X_IWM = this.mainGroup.append("text")
             .attr("id", "X_IWM")
             .style("font-size", "3em")
-            .style("font-text-anchor=", "middle")
+            .style("text-anchor", "middle")
             .style("dominant-baseline", "hanging")
             .attr("x", this.boardWidth*0.7)
             .attr("y", this.boardHeight + DataCard.unitSize)
@@ -798,6 +851,9 @@ class DOMHandler {
             .domain(d3.range(numRows))
             .range([startY, endY])
             .padding(padding);
+
+        this.gridLineX = (i) => this.gridX(i) + DataCard.unitSize/2;
+        this.gridLineY = (i) => this.gridY(i) - DataCard.unitSize/2;
 
         this.pendingDOMPositions = [];
         for (let i = 0; i < this.pendingSize; i++) {
@@ -894,7 +950,7 @@ class DOMHandler {
         }
     
         // find out if new values are added
-        let duration = 33;
+        let duration = 100;
         if (this.similarityGroup.selectAll("rect").size() < scores.flat().length) {
             duration = 0;
         }
