@@ -1287,19 +1287,19 @@ document.addEventListener('DOMContentLoaded',
         // Connect the buttons
         document.getElementById("addCategory0")
             .addEventListener("click", () => {
-                dataHandler.pendingEntries[0].label = label;
+                dataHandler.pendingEntries[0].label = 0;
                 domHandler.pendingCards[0].updateDOM();
                 createDataCard('0');
             });
         document.getElementById("addCategory1")
             .addEventListener("click", () => {
-                dataHandler.pendingEntries[0].label = label;
+                dataHandler.pendingEntries[0].label = 1;
                 domHandler.pendingCards[0].updateDOM();
                 createDataCard('1');
             });
         document.getElementById("addCategory2")
             .addEventListener("click", () => {
-                dataHandler.pendingEntries[0].label = label;
+                dataHandler.pendingEntries[0].label = 2;
                 domHandler.pendingCards[0].updateDOM();
                 createDataCard('2');
             });
