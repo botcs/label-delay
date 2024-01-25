@@ -1289,19 +1289,19 @@ document.addEventListener('DOMContentLoaded',
             .addEventListener("click", () => {
                 dataHandler.pendingEntries[0].label = 0;
                 domHandler.pendingCards[0].updateDOM();
-                createDataCard(0);
+                createDataCard(UNLABELED);
             });
         document.getElementById("addCategory1")
             .addEventListener("click", () => {
                 dataHandler.pendingEntries[0].label = 1;
                 domHandler.pendingCards[0].updateDOM();
-                createDataCard(0);
+                createDataCard(UNLABELED);
             });
         document.getElementById("addCategory2")
             .addEventListener("click", () => {
                 dataHandler.pendingEntries[0].label = 2;
                 domHandler.pendingCards[0].updateDOM();
-                createDataCard(0);
+                createDataCard(UNLABELED);
             });
         // document.getElementById("addCategory1")
         //     .addEventListener("click", () => createDataCard('1'));
