@@ -1177,6 +1177,10 @@ async function createDataCard(label = UNLABELED, url = null) {
         await domHandler.renderPromise;
         
     }
+
+    dataHandler.pendingEntries[0].label = label;
+    domHandler.pendingCards[0].updateDOM();
+
     let inData;
     if (url !== null) {
         inData = await loadImage(url);
@@ -1347,8 +1351,6 @@ document.addEventListener('keydown', function(event) {
         default:
             return; // Do nothing if it's any other key
     }
-    dataHandler.pendingEntries[0].label = label;
-    domHandler.pendingCards[0].updateDOM();
     createDataCard(UNLABELED);
     // Handle the output as needed, such as updating the UI or triggering other actions.
 });
