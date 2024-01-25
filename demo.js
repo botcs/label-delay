@@ -1177,10 +1177,6 @@ async function createDataCard(label = UNLABELED, url = null) {
         await domHandler.renderPromise;
         
     }
-
-    dataHandler.pendingEntries[0].label = label;
-    domHandler.pendingCards[0].updateDOM();
-
     let inData;
     if (url !== null) {
         inData = await loadImage(url);
@@ -1290,11 +1286,27 @@ document.addEventListener('DOMContentLoaded',
 
         // Connect the buttons
         document.getElementById("addCategory0")
-            .addEventListener("click", () => createDataCard('0'));
+            .addEventListener("click", () => {
+                dataHandler.pendingEntries[0].label = label;
+                domHandler.pendingCards[0].updateDOM();
+                createDataCard('0');
+            });
         document.getElementById("addCategory1")
-            .addEventListener("click", () => createDataCard('1'));
+            .addEventListener("click", () => {
+                dataHandler.pendingEntries[0].label = label;
+                domHandler.pendingCards[0].updateDOM();
+                createDataCard('1');
+            });
         document.getElementById("addCategory2")
-            .addEventListener("click", () => createDataCard('2'));
+            .addEventListener("click", () => {
+                dataHandler.pendingEntries[0].label = label;
+                domHandler.pendingCards[0].updateDOM();
+                createDataCard('2');
+            });
+        // document.getElementById("addCategory1")
+        //     .addEventListener("click", () => createDataCard('1'));
+        // document.getElementById("addCategory2")
+        //     .addEventListener("click", () => createDataCard('2'));
         document.getElementById("trainModel")
             .addEventListener("click", () => trainer.trainModel());
         document.getElementById("saveImages")
@@ -1351,6 +1363,8 @@ document.addEventListener('keydown', function(event) {
         default:
             return; // Do nothing if it's any other key
     }
+    dataHandler.pendingEntries[0].label = label;
+    domHandler.pendingCards[0].updateDOM();
     createDataCard(UNLABELED);
     // Handle the output as needed, such as updating the UI or triggering other actions.
 });
