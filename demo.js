@@ -4,7 +4,7 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
 
-const FPS = 30;
+const REFRESH_RATE = 30;
 
 ////////////////////////////////////////
 // Machine Learning params
@@ -1221,16 +1221,17 @@ async function updatePendingDataCard(idx) {
         return;
     }
 
-    // if the user is using a mobile device limit the fps to 1
+    // if the user is using a mobile device limit the fps to 2
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     // I could use a counter, but then async headaches...
-    const skipInference = isMobile && Math.random() > 1/REFRESH_RATE;
+    const skipInference = isMobile && Math.random() > 2/REFRESH_RATE;
 
     // Update the newest data entry
     tf.tidy(() => {
         const dataEntry = dataHandler.pendingEntries[idx];
         const inData = captureWebcam();
         const outData = skipInference ? null : trainer.model.predict(inData.Tensor);
+        // const outData = trainer.model.predict(inData.Tensor);
         dataEntry.updateData(inData, outData);
         dataHandler.updateSimilaritiesRow(idx);
     });
