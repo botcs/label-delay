@@ -4,6 +4,8 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
 
+const FPS = 30;
+
 ////////////////////////////////////////
 // Machine Learning params
 ////////////////////////////////////////
@@ -14,7 +16,7 @@ const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.adam(LR);
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
-const ARCHITECTURE = "cnn";
+const ARCHITECTURE = "cnn"
 
 
 
@@ -1219,10 +1221,10 @@ async function updatePendingDataCard(idx) {
         return;
     }
 
-    // if the user is using a mobile device limit the fps to 2
+    // if the user is using a mobile device limit the fps to 1
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     // I could use a counter, but then async headaches...
-    const skipInference = isMobile && Math.random() > 0.5;
+    const skipInference = isMobile && Math.random() > 1/REFRESH_RATE;
 
     // Update the newest data entry
     tf.tidy(() => {
@@ -1343,8 +1345,10 @@ document.addEventListener('DOMContentLoaded',
 
         // Start the interval to update the pending datacard
         // if the user is using a mobile device limit the fps to 2
-        let rate = 33;
-        interval = setInterval(async () => {updatePendingDataCard(0);}, rate);
+        interval = setInterval(
+            async () => {updatePendingDataCard(0);}, 
+            1000/REFRESH_RATE
+        );
     }
 );
 
@@ -1367,10 +1371,11 @@ document.addEventListener('visibilitychange', async () => {
     } else if (document.visibilityState === "visible") {
         if (interval === null) {
             await startWebcam();
-
             // Start the interval to update the pending datacard
-            let rate = 33;
-            interval = setInterval(async () => {updatePendingDataCard(0);}, rate);
+            interval = setInterval(
+                async () => {updatePendingDataCard(0);},
+                1000/REFRESH_RATE
+            );
         }
     }
 });
