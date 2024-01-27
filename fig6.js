@@ -1,5 +1,9 @@
 function fig6() {
-    const svg = d3.select("#fig6-svg").attr("stroke", "black")
+    const svg = d3.select("#fig6-svg").attr("stroke", "black");
+
+    const width = svg.attr("viewBox").split(" ")[2];
+    const height = svg.attr("viewBox").split(" ")[3];
+    
     const baseY = 180;
     const rectSize = 50;
     const labelGap = 100;
@@ -71,7 +75,7 @@ function fig6() {
     
     // Define background rectangle for the image
     const annotImageBG = svg.append("rect")
-        .attr('x', svg.attr("width") - streamFigSize)
+        .attr('x', width - streamFigSize)
         .attr('y', 0)
         .attr('width', streamFigSize)
         .attr('height', labelY + 20)
@@ -80,7 +84,7 @@ function fig6() {
 
     const cloudImage = svg.append("image")
         .attr('xlink:href', 'bare-cloud.png')
-        .attr('x', svg.attr("width") - streamFigSize)
+        .attr('x', width - streamFigSize)
         .attr('y', baseY - 20)
         .attr('width', streamFigSize)
         .attr('height', streamFigSize);
@@ -89,13 +93,13 @@ function fig6() {
 
     const annotImage = svg.append("image")
         .attr('xlink:href', 'doctor.png')
-        .attr('x', svg.attr("width") - streamFigSize)
+        .attr('x', width - streamFigSize)
         .attr('y', baseY + labelGap)
         .attr('width', streamFigSize)
         .attr('height', streamFigSize);
 
     const rateText = svg.append("text")
-        .attr("x", svg.attr("width") - streamFigSize / 2)
+        .attr("x", width - streamFigSize / 2)
         .attr("y", baseY + streamFigSize - 10)
         .attr("text-anchor", "middle")
         // .attr("dominant-baseline", "middle")
@@ -164,9 +168,9 @@ function fig6() {
             .attr("class", "sample-group")
             .attr("sampleID", rectID)
             .attr("isAnnotated", isAnnotated)
-            .attr("data-x", svg.attr("width") - streamFigSize)
+            .attr("data-x", width - streamFigSize)
             .attr("data-strides", "0")
-            .attr("transform", `translate(${svg.attr("width")}, 0)`);
+            .attr("transform", `translate(${width}, 0)`);
 
         // Add the rounded rectangle
         group.append("rect")
@@ -258,7 +262,24 @@ function fig6() {
         rectID++;
     }
 
-    let intervalId = setInterval(addRectangle, shiftDuration);
+    let interval = setInterval(addRectangle, shiftDuration);
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            if (interval !== null) {
+                clearInterval(interval);
+                interval = null;
+            }
+        } else if (document.visibilityState === "visible") {
+            if (interval === null) {
+                interval = setInterval(
+                    addRectangle, 
+                    shiftDuration
+                );
+            }
+        }
+    });
+
 
 
     timeline = svg.append("g")
@@ -268,7 +289,7 @@ function fig6() {
     timeline.append("line")
         .attr("x1",0)  
         .attr("y1",timelineY)
-        .attr("x2",svg.attr("width")-streamFigSize-2*spacing)
+        .attr("x2",width-streamFigSize-2*spacing)
         .attr("y2",timelineY)  
         .attr("stroke","black")  
         .attr("stroke-width",2)  
@@ -278,8 +299,8 @@ function fig6() {
         .attr("class", "delayed-legend")
         .attr("transform", "translate(0, 0)");
 
-    brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-    brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+    brace_x1 = width - annotImage.attr("width") - labelDelay * shiftAmount;
+    brace_x2 = width - annotImage.attr("width") - spacing;
     brace_y = labelY+30;
     brace_xmid = (brace_x1 + brace_x2) / 2;
     brace = delayed_legend.append("path")
@@ -307,8 +328,8 @@ function fig6() {
         labelDelay = newLabelDelay;
         // update the curly brace
         old_brace_x1 = brace_x1;
-        brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-        brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+        brace_x1 = width - annotImage.attr("width") - labelDelay * shiftAmount;
+        brace_x2 = width - annotImage.attr("width") - spacing;
         brace_y = labelY + 30;
         brace_xmid = (brace_x1 + brace_x2) / 2;
 

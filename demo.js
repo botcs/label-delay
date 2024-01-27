@@ -57,10 +57,13 @@ class DataEntry {
         this.feat.dispose();
     }
 
-    updateData(inData, outData) {
+    updateData(inData, outData=null) {
         // Update the data of the entry
         this.inData.dataURL = inData.dataURL;
         this.inData.Tensor.assign(inData.Tensor);
+        if (outData === null) {
+            return;
+        }
         this.pred.assign(tf.squeeze(outData[0]));
         const feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
@@ -1142,7 +1145,17 @@ function captureWebcam() {
     ctx.scale(-1, 1);
 
     // Draw the cropped area onto the canvas
-    ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, outputSize, outputSize);
+    ctx.drawImage(
+        video, 
+        sourceX, 
+        sourceY, 
+        sourceWidth, 
+        sourceHeight, 
+        0, 
+        0, 
+        outputSize, 
+        outputSize
+    );
 
     const dataURL = canvas.toDataURL('image/png');
     const dataTensor = tf.tidy(() => frameToTensor(video));
@@ -1199,16 +1212,32 @@ async function createDataCard(label = UNLABELED, url = null) {
 
 
 async function updatePendingDataCard(idx) {
+    // measure the time it takes to update the pending datacard
+    const start = performance.now();
+    
+    if (domHandler.pendingCards.length === 0) {
+        return;
+    }
+
+    // if the user is using a mobile device limit the fps to 2
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // I could use a counter, but then async headaches...
+    const skipInference = isMobile && Math.random() > 0.5;
+
     // Update the newest data entry
     tf.tidy(() => {
         const dataEntry = dataHandler.pendingEntries[idx];
         const inData = captureWebcam();
-        const outData = trainer.model.predict(inData.Tensor);
+        const outData = skipInference ? null : trainer.model.predict(inData.Tensor);
         dataEntry.updateData(inData, outData);
         dataHandler.updateSimilaritiesRow(idx);
     });
     await domHandler.renderSimilarities();
     await domHandler.pendingCards[idx].updateDOM();
+    const end = performance.now();
+
+    // benchmark the time it takes to update the pending datacard
+    // console.log(`Updating the pending datacard took ${end-start} ms`);
 }
 
 async function loadImages() {
@@ -1313,13 +1342,15 @@ document.addEventListener('DOMContentLoaded',
             .addEventListener("click", downloadAllImagesAsZip);
 
         // Start the interval to update the pending datacard
-        interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
+        // if the user is using a mobile device limit the fps to 2
+        let rate = 33;
+        interval = setInterval(async () => {updatePendingDataCard(0);}, rate);
     }
 );
 
 // stop the setInterval and webcam when the user switches tabs
 document.addEventListener('visibilitychange', async () => {
-    if (document.hidden) {
+    if (document.visibilityState === "hidden") {
         if (interval !== null) {
             clearInterval(interval);
             interval = null;
@@ -1336,7 +1367,10 @@ document.addEventListener('visibilitychange', async () => {
     } else if (document.visibilityState === "visible") {
         if (interval === null) {
             await startWebcam();
-            interval = setInterval(async () => {updatePendingDataCard(0);}, 33);
+
+            // Start the interval to update the pending datacard
+            let rate = 33;
+            interval = setInterval(async () => {updatePendingDataCard(0);}, rate);
         }
     }
 });
@@ -1345,16 +1379,16 @@ document.addEventListener('visibilitychange', async () => {
 document.addEventListener('keydown', function(event) {
     let label;
     switch (event.key.toLowerCase()) {
-        case 'v':
+        case '`':
             label = UNLABELED;
             break;
-        case 'b':
+        case '1':
             label = '0';
             break;
-        case 'n':
+        case '2':
             label = '1';
             break;
-        case 'm':
+        case '3':
             label = '2';
             break;
         case 't':

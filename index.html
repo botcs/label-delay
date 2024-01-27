@@ -55,14 +55,18 @@
             pointer-events: none; /* This makes sure text doesn't interfere with the hover effect */
         }
 
-        .fig{
-            /* margin: 0 auto; */
-            /* max-width: 1000px; */
-            /* padding-top: 30px; */
-            /* text-align: center; */
+        .main-fig{
+            width: 85%;
+        }
+        .fig {
             display: flex;
-            flex-direction: column;
             align-items: center;
+            justify-content: center;
+            width: 100%; /* Full width of the parent */
+        }
+
+        .fig > svg {
+            width: 70%; /* SVG takes 70% of its container */
         }
         .bottom-dashed-border {
            border-bottom: 2px dashed #000;  /* 2px width, dashed style, and black color */
@@ -90,6 +94,7 @@
         a {
             color: black;
         }
+        
     </style>
 </head>
 
@@ -120,9 +125,11 @@
             <h5>
                 [<a href="https://arxiv.org/abs/2312.00923">Paper</a>]
                 [<a href="https://github.com/botcs/label-delay-cl">Code</a> (coming soon)]
+                [<a href="./demo.html">Demo</a>]
             </h5>
-            <div id="fig1" class="fig">
-                <svg width="1000" height="500" id="fig1-svg">
+            <div id="fig1" class="main-fig">
+                <!-- <svg width="1000" height="500" id="fig1-svg"> -->
+                <svg id="fig1-svg" viewBox="0 0 1000 500">
                     <defs id="fig1-defs">
                         <filter id="grayscale">
                             <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
@@ -154,7 +161,7 @@
                 In investment banking, the time it takes to receive the results of a trade can be significantly longer than the time it takes to execute the trade itself.
                 In the world of copyright claims, an automated trigger mechanism can prevent fraudulent usage of the content sharing platform, however the actual evaluation of each case by the owners is often significantly delayed.
             <div id="fig2" class="fig" style="text-align:center; margin-top:20px">
-                <svg width="700" height="280" id="fig2-svg">
+                <svg id="fig2-svg" viewBox="0 0 700 280">
                     <defs id="fig2-defs">
                         <filter id="grayscale">
                             <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
@@ -174,7 +181,7 @@
                 </svg>
             </div>
             <div id="fig3" class="fig">
-                <svg width="700" height="280" id="fig3-svg">
+                <svg id="fig3-svg" viewBox="0 0 700 280">
                     <defs id="fig3-defs">
                         <filter id="grayscale">
                             <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
@@ -194,7 +201,7 @@
                 </svg>
             </div>
             <div id="fig4" class="fig">
-                <svg width="700" height="280" id="fig4-svg">
+                <svg id="fig4-svg" viewBox="0 0 700 280">
                     <defs id="fig4-defs">
                         <filter id="grayscale">
                             <feColorMatrix id="matrix" type="saturate" values="0"></feColorMatrix>
@@ -250,8 +257,8 @@
                 1) using the unlabeled samples to improve the model
                 2) keeping the solution computationally efficient
                 To address these challenges our experiment allows the continual learning models to use the unlabeled samples, while normalizing the computational cost of the model to be the same as the naïve solution.
-                <div id="fig5" class="fig" style="margin-top:20px; margin-bottom:20px">
-                    <svg width="700" height="400" id="fig5-svg">
+                <div id="fig5" class="fig" style="margin-top:20px; margin-bottom:20px;">
+                    <svg id="fig5-svg" viewBox="0 0 700 400">
                         <defs id="fig5-defs">
                             <marker
                                 id="arrow"
@@ -284,7 +291,8 @@
                 In such cases, the choice which samples are labeled and which are not is not arbitrary, but rather a strategic decision that can have a significant impact on the performance of the model.
                 This is especially true in the case of continual learning, where the model is expected to perform well on the most recent data.
                 <div id="fig6" class="fig" style="margin-top:20px; margin-bottom:20px">
-                    <svg width="1000" height="420" id="fig6-svg">
+                    <!-- <svg width="1000" height="420" id="fig6-svg"> -->
+                    <svg id="fig6-svg" viewBox="0 0 1000 420">
                         <defs id="fig6-defs">
                             <marker
                                 id="arrow"

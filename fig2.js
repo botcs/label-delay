@@ -1,6 +1,8 @@
 function fig2() {
-    const defs = d3.select("#fig2-defs");
     const svg = d3.select("#fig2-svg").attr("stroke", "black")
+    const width = svg.attr("viewBox").split(" ")[2];
+    const height = svg.attr("viewBox").split(" ")[3];
+    const defs = d3.select("#fig2-defs");
     const baseY = 10;
     const labelGap = 100;
     let keywords = ["1 day", "2 days", "3 days", "5 days", "7 days"]
@@ -61,16 +63,16 @@ function fig2() {
     const streamFigSize = 110;
     // Define background rectangle for the image
     const annotImageBG = svg.append("rect")
-        .attr('x', svg.attr("width") - streamFigSize)
+        .attr('x', width - streamFigSize)
         .attr('y', 0)
         .attr('width', streamFigSize)
-        .attr('height', svg.attr("height"))
+        .attr('height', height)
         .attr('fill', 'white')
         .attr('stroke', 'white');
 
     const cloudImage = svg.append("image")
         .attr('xlink:href', 'bare-cloud.png')
-        .attr('x', svg.attr("width") - streamFigSize)
+        .attr('x', width - streamFigSize)
         .attr('y', baseY - 20)
         .attr('width', streamFigSize)
         .attr('height', streamFigSize);
@@ -79,7 +81,7 @@ function fig2() {
 
     const annotImage = svg.append("image")
         .attr('xlink:href', 'doctor.png')
-        .attr('x', svg.attr("width") - streamFigSize)
+        .attr('x', width - streamFigSize)
         .attr('y', baseY + labelGap)
         .attr('width', streamFigSize)
         .attr('height', streamFigSize);
@@ -150,9 +152,9 @@ function fig2() {
         // Create a group
         const group = svg.append("g")
             .attr("class", "sample-group")
-            .attr("data-x", svg.attr("width") - streamFigSize)
+            .attr("data-x", width - streamFigSize)
             .attr("data-strides", "0")
-            .attr("transform", `translate(${svg.attr("width")}, 0)`);
+            .attr("transform", `translate(${width}, 0)`);
 
         // Add the rounded rectangle
         group.append("rect")
@@ -243,7 +245,24 @@ function fig2() {
         rectID++;
     }
 
-    let intervalId = setInterval(addRectangle, shiftDuration);
+    let interval = setInterval(addRectangle, shiftDuration);
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            if (interval !== null) {
+                clearInterval(interval);
+                interval = null;
+            }
+        } else if (document.visibilityState === "visible") {
+            if (interval === null) {
+                interval = setInterval(
+                    addRectangle, 
+                    shiftDuration
+                );
+            }
+        }
+    });
+
 
 
     timeline = svg.append("g")
@@ -253,7 +272,7 @@ function fig2() {
     timeline.append("line")
         .attr("x1",0)  
         .attr("y1",timelineY)
-        .attr("x2",svg.attr("width")-streamFigSize-2*spacing)
+        .attr("x2",width-streamFigSize-2*spacing)
         .attr("y2",timelineY)  
         .attr("stroke","black")  
         .attr("stroke-width",2)  
@@ -266,8 +285,8 @@ function fig2() {
     // Draw curly brace for the label delay
     // brace_x1 = 470;
     // brace_x2 = 780;
-    brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-    brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+    brace_x1 = width - annotImage.attr("width") - labelDelay * shiftAmount;
+    brace_x2 = width - annotImage.attr("width") - spacing;
     brace_y = labelY + 50;
     brace_xmid = (brace_x1 + brace_x2) / 2;
     brace = delayed_legend.append("path")
@@ -291,7 +310,7 @@ function fig2() {
 
         svg.append("text")
             .attr("x", 10)
-            .attr("y", svg.attr("height") - 30)
+            .attr("y", height - 30)
             .attr("text-anchor", "start")
             .attr("dominant-baseline", "middle")
             .style("font-size", "45px")

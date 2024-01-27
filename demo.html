@@ -13,7 +13,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond&display=swap" rel="stylesheet">
-
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+    </script>
+    <script type="text/javascript" async
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
     <meta charset="UTF-8">
     <title>Label Delay Demo</title>
     <style>
@@ -131,7 +136,19 @@
         h1 {
             text-align: center;
             font-size: 3vw;
-            font-family: 'EB Garamond', serif;
+        }
+
+        h3 {
+            margin-bottom: 0.25em;
+        }
+
+        p {
+            margin-top: 0.25em;
+        }
+
+        #explanation {
+            width: 70%;
+            margin: auto;
         }
         
     </style>
@@ -165,5 +182,52 @@
         <canvas id="aux-canvas" style="display: none;"></canvas>
     </div>
     <script src="demo.js"></script>
+    <div id="explanation">
+        <h2>
+            Explanation:
+        </h2>
+        <p>
+            This demo shows an instance of the label delay problem.
+            The goal is to train a model on a stream of data points, where each data point is associated with a label.
+            In this scenario the delay is 3 steps.
+            As you can see, there are three slots in the Pending Entries segment, which means that
+            the newest sample will not be available for training until three new cards have been added.
+            Only once they have moved to the Memory Buffer segment, they can be accessed for training.
+        </p>
+        <h3>
+            The Datacards
+        </h3>
+        <p>
+            Each card represents a data point and the cirlces represent the corresponding feature embeddings.
+            There are 3 categories of data points, each with a different color.
+            The data arrives on the top left corner, and slowly moves to the end of the Pending Entries segment.
+            If they are unlabeled (gray), they are discarded, otherwise they are moved to the Memory Buffer segment.
+            A new data card can be added by pressing one of the "Add Category" buttons (or by pressing the corresponding key on the keyboard)
+
+            
+        </p>
+        <h3>
+            The Model
+        </h3>
+        <p>
+            The model is a 2-layer convnet, randomly initialized with a fixed seed for reproducibility. 
+            The model parameters are updated by pressing the "Train Model" button.
+            The update takes a single SGD step with a learning rate of 0.001 on the two selected samples.
+            The loss function is the cross-entropy loss.
+
+            Each time the model is trained on two samples: one randomly selected sample ($X_\textrm{RND}$) and one sample selected from the memory buffer ( $X_\textrm{IWM}$ ).
+            The selection is based on the Cosine Similarity between the embeddings of the newest sample (top left) and the embeddings of the samples in the memory buffer.
+        </p>
+        <h3>
+            The Similarity Grid
+        </h3>
+        <p>
+            For each pending entries ($X_i$) and memory buffer ($X_j$) sample, we first compute the cosine similarity between their embeddings:
+            $$\textrm{cos}\left(f_\theta(X_i), f_\theta(X_j)\right).$$
+            Second, we compute the softmax for every row, representing the probability of the IWM sampling policy selecting $X_j$:
+            $$\textrm{softmax}_i = \frac{\exp(\textrm{cos}(X_i, X_j))}{\sum_{j=1}^N \exp(\textrm{cos}(X_i, X_j))}$$
+            For visualization in the grid, we rescale the probabilities such that the highest probability will fill the entire cell, and the colour will match the colour of the corresponding memory buffer sample.
+        </p>
+    </div>
 </body>
 </html>

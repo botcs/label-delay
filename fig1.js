@@ -3,6 +3,8 @@ function fig1() {
 
 let defs = d3.select("#defs");
 let svg = d3.select("#fig1-svg").attr("stroke", "black")
+const width = svg.attr("viewBox").split(" ")[2];
+const height = svg.attr("viewBox").split(" ")[3];
 let baseY = 100;
 let labelGap = 100;
 let keywords = [
@@ -82,7 +84,7 @@ function getImageSize(imageUrl) {
 
 const cloudImage = svg.append("image")
     .attr('xlink:href', 'cloud.png')
-    .attr('x', svg.attr("width") - 200)
+    .attr('x', width - 200)
     .attr('y', baseY - 50)
     .attr('width', 200)
     .attr('height', 200);
@@ -90,7 +92,7 @@ const cloudImage = svg.append("image")
 
 // Define background rectangle for the image
 const annotImageBG = svg.append("rect")
-    .attr('x', svg.attr("width") - 200)
+    .attr('x', width - 200)
     .attr('y', baseY + labelGap + 50)
     .attr('width', 200)
     .attr('height', 180)
@@ -100,7 +102,7 @@ const annotImageBG = svg.append("rect")
 
 const annotImage = svg.append("image")
     .attr('xlink:href', 'annot.png')
-    .attr('x', svg.attr("width") - 220)
+    .attr('x', width - 220)
     .attr('y', baseY + labelGap + 50)
     .attr('width', 200)
     .attr('height', 200);
@@ -108,7 +110,7 @@ const annotImage = svg.append("image")
 
 
 const rectSize = 100;
-const timelineHeight = svg.attr("height") - 150;
+const timelineHeight = height - 150;
 const spacing = 10;
 const shiftAmount = rectSize + spacing;
 const shiftDuration = 1000;
@@ -166,9 +168,9 @@ function addRectangle() {
     // Create a group
     const group = svg.append("g")
         .attr("class", "sample-group")
-        .attr("data-x", svg.attr("width") - 200)
+        .attr("data-x", width - 200)
         .attr("data-strides", "0")
-        .attr("transform", `translate(${svg.attr("width")}, 0)`);
+        .attr("transform", `translate(${width}, 0)`);
 
     // Add the rounded rectangle
     group.append("rect")
@@ -282,7 +284,24 @@ function addRectangle() {
     rectID++;
 }
 
-let intervalId = setInterval(addRectangle, shiftDuration);
+let interval = setInterval(addRectangle, shiftDuration);
+// stop the setInterval and webcam when the user switches tabs
+document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) {
+        if (interval !== null) {
+            clearInterval(interval);
+            interval = null;
+        }
+    } else if (document.visibilityState === "visible") {
+        if (interval === null) {
+            interval = setInterval(
+                addRectangle, 
+                shiftDuration
+            );
+        }
+    }
+});
+
 
 
 timeline = svg.append("g")
@@ -292,7 +311,7 @@ timeline = svg.append("g")
 timeline.append("line")
     .attr("x1",0)  
     .attr("y1",timelineHeight)
-    .attr("x2",svg.attr("width")-220)
+    .attr("x2",width-220)
     .attr("y2",timelineHeight)  
     .attr("stroke","black")  
     .attr("stroke-width",2)  
@@ -313,8 +332,8 @@ delayed_legend = timeline.append("g")
 // Draw curly brace for the label delay
 // brace_x1 = 470;
 // brace_x2 = 780;
-let brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-let brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+let brace_x1 = width - annotImage.attr("width") - labelDelay * shiftAmount;
+let brace_x2 = width - annotImage.attr("width") - spacing;
 brace_y = timelineHeight + 50;
 brace_xmid = (brace_x1 + brace_x2) / 2;
 const brace = delayed_legend.append("path")
@@ -338,16 +357,16 @@ const brace_text = delayed_legend.append("text")
 
 // Draw dashed line for train / eval
 delayed_legend.append("line")
-    .attr("x1", svg.attr("width") - 315)
+    .attr("x1", width - 315)
     .attr("y1", baseY - 70)
-    .attr("x2", svg.attr("width") - 315)
+    .attr("x2", width - 315)
     .attr("y2", timelineHeight)
     .attr("stroke", "black")
     .attr("stroke-width", 2)
     .attr("stroke-dasharray", "5,5");
 
 delayed_legend.append("text")
-    .attr("x", svg.attr("width") - 210 - rectSize / 2)
+    .attr("x", width - 210 - rectSize / 2)
     .attr("y", baseY - 50)
     .attr("text-anchor", "middle")
     .attr("dominant-baseline", "middle")
@@ -355,7 +374,7 @@ delayed_legend.append("text")
     .text("Eval");
 
 delayed_legend.append("text")
-    .attr("x", svg.attr("width") - 220 - rectSize * 1.5)
+    .attr("x", width - 220 - rectSize * 1.5)
     .attr("y", baseY - 50)
     .attr("text-anchor", "middle")
     .attr("dominant-baseline", "middle")
@@ -369,8 +388,8 @@ function increaseLabelDelay() {
     
     // update the curly brace
     old_brace_x1 = brace_x1;
-    brace_x1 = svg.attr("width") - annotImage.attr("width") - labelDelay * shiftAmount;
-    brace_x2 = svg.attr("width") - annotImage.attr("width") - spacing;
+    brace_x1 = width - annotImage.attr("width") - labelDelay * shiftAmount;
+    brace_x2 = width - annotImage.attr("width") - spacing;
     brace_y = timelineHeight + 50;
     brace_xmid = (brace_x1 + brace_x2) / 2;
 
