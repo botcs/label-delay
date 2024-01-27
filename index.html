@@ -57,6 +57,7 @@
 
         .main-fig{
             width: 85%;
+            text-align: center;
         }
         .fig {
             display: flex;
@@ -290,9 +291,9 @@
                 Although our current model anticipates that each data sample will be assigned a label after a specific number of steps (exactly $d$ steps), this may not be feasible in real-world conditions where data accumulates faster than labels can be assigned, potentially leaving some samples unlabeled indefinitely.
                 In such cases, the choice which samples are labeled and which are not is not arbitrary, but rather a strategic decision that can have a significant impact on the performance of the model.
                 This is especially true in the case of continual learning, where the model is expected to perform well on the most recent data.
-                <div id="fig6" class="main-fig" style="margin-top:20px; margin-bottom:20px">
+                <div id="fig6" class="fig" style="margin-top:20px; margin-bottom:20px">
                     <!-- <svg width="1000" height="420" id="fig6-svg"> -->
-                    <svg id="fig6-svg" viewBox="0 0 1000 420">
+                    <svg id="fig6-svg" viewBox="0 0 1000 420" style="width:85%">
                         <defs id="fig6-defs">
                             <marker
                                 id="arrow"
