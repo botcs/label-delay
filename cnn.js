@@ -34,7 +34,7 @@ function _CNN(inputShape, width=64) {
     x = convBlock(x, width*2, 3, 1, true);
     x = tf.layers.globalAveragePooling2d({dataFormat: "channelsLast"}).apply(x);
     x = tf.layers.dense({
-        units: 64,
+        units: width*2,
         activation: 'selu',
         kernelInitializer: 'heNormal',
         kernelRegularizer: 'l1l2',
@@ -44,7 +44,7 @@ function _CNN(inputShape, width=64) {
 
 
 function CNN_SMALL(inputShape) {
-    return _CNN(inputShape, 8);
+    return _CNN(inputShape, 4);
 }
 
 function CNN_BASE(inputShape) {
