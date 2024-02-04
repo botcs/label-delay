@@ -4,7 +4,8 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
 
-const REFRESH_RATE = 30;
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const REFRESH_RATE = isMobile ? 25 : 30;
 
 ////////////////////////////////////////
 // Machine Learning params
@@ -16,11 +17,17 @@ const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.adam(LR);
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
-const ARCHITECTURE = "cnn"
+const ARCHITECTURE = isMobile ? "cnn_small" : "cnn_base";
 
 
 
 const video = document.getElementById('webcam');
+
+// Attempt to play video automatically
+video.setAttribute('autoplay', 'true');
+video.setAttribute('muted', 'true'); // Mute the video to allow autoplay without user interaction
+video.setAttribute('playsinline', 'true'); // This attribute is important for autoplay in iOS
+
 const canvas = document.getElementById('aux-canvas');
 const svg = d3.select("#main")
 
@@ -62,10 +69,10 @@ class DataEntry {
     updateData(inData, outData=null) {
         // Update the data of the entry
         this.inData.dataURL = inData.dataURL;
-        this.inData.Tensor.assign(inData.Tensor);
         if (outData === null) {
             return;
         }
+        this.inData.Tensor.assign(inData.Tensor);
         this.pred.assign(tf.squeeze(outData[0]));
         const feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
@@ -279,7 +286,8 @@ class Trainer{
         const backboneFactory = {
             "resnet18": resNet18,
             "mobilenetv2": mobileNetV2,
-            "cnn": CNN
+            "cnn_base": CNN_BASE,
+            "cnn_small": CNN_SMALL
         }[ARCHITECTURE];
         const model = tf.tidy(() => {
             const backbone = backboneFactory([IMAGE_SIZE, IMAGE_SIZE, IMAGE_CHANNELS]);
@@ -1116,6 +1124,10 @@ async function startWebcam() {
 
 function captureWebcam() {
     const ctx = canvas.getContext('2d');
+
+    // log if the video is playing
+    console.log(`Video playing: ${!video.paused}`);
+
     const outputSize = 480; // Set the desired output size
 
     // Set the canvas size to the output size
@@ -1160,6 +1172,7 @@ function captureWebcam() {
     );
 
     const dataURL = canvas.toDataURL('image/png');
+    console.log(`Captured frame: ${dataURL.slice(-80)}`);
     const dataTensor = tf.tidy(() => frameToTensor(video));
     const frame = {
         dataURL: dataURL,
@@ -1222,19 +1235,25 @@ async function updatePendingDataCard(idx) {
     }
 
     // if the user is using a mobile device limit the fps to 2
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     // I could use a counter, but then async headaches...
     const skipInference = isMobile && Math.random() > 2/REFRESH_RATE;
+    // const skipInference = true;
 
     // Update the newest data entry
+    const dataEntry = dataHandler.pendingEntries[idx];
     tf.tidy(() => {
-        const dataEntry = dataHandler.pendingEntries[idx];
         const inData = captureWebcam();
-        const outData = skipInference ? null : trainer.model.predict(inData.Tensor);
-        // const outData = trainer.model.predict(inData.Tensor);
+        if (skipInference) {
+            dataEntry.updateData(inData, null);
+            return;
+        }
+        const outData = trainer.model.predict(inData.Tensor);
         dataEntry.updateData(inData, outData);
         dataHandler.updateSimilaritiesRow(idx);
     });
+    image_hash = await dataHandler.pendingEntries[idx].inData.Tensor.data();
+    // hash image to compare with the previous image
+
     await domHandler.renderSimilarities();
     await domHandler.pendingCards[idx].updateDOM();
     const end = performance.now();
@@ -1345,7 +1364,6 @@ document.addEventListener('DOMContentLoaded',
             .addEventListener("click", downloadAllImagesAsZip);
 
         // Start the interval to update the pending datacard
-        // if the user is using a mobile device limit the fps to 2
         interval = setInterval(
             async () => {updatePendingDataCard(0);}, 
             1000/REFRESH_RATE
