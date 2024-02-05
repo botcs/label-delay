@@ -18,7 +18,7 @@ const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.adam(LR);
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
-const ARCHITECTURE = isMobile ? "cnn_small" : "cnn_base";
+const ARCHITECTURE = "cnn_base";
 const TRAIN_REPEAT_INTERVAL = 3000;
 
 
