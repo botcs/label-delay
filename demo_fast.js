@@ -6,7 +6,7 @@ const UNLABELED = 42;
 const THUMBNAIL_SIDE_LENGTH = 128;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-const REFRESH_RATE = isMobile ? 25 : 30;
+let REFRESH_RATE = 60;
 
 ////////////////////////////////////////
 // Machine Learning params
@@ -1288,6 +1288,9 @@ class EventHandler {
     constructor() {
         this.renderPromise = null;
         this.active = true;
+
+        this.nextLabel = UNLABELED;
+        this.lastUpdate = performance.now();
     }
 
     async addDataWithoutAnimation(label=UNLABELED) {
@@ -1355,9 +1358,11 @@ class EventHandler {
         if (!this.active) {
             return;
         }
-
-        window.requestAnimationFrame(() => {
+        if (performance.now() - this.lastUpdate > 1000 / REFRESH_RATE) {   
+            this.lastUpdate = performance.now();
             this.addDataWithoutAnimation(this.nextLabel);
+        }
+        window.requestAnimationFrame(() => {
             this.renderLoop();
         });
     }
@@ -1433,14 +1438,29 @@ document.addEventListener('DOMContentLoaded',
         // Connect the buttons
         for (let i = 0 ; i < 3; i++) {
             button = document.getElementById(`addCategory${i}`);
-            // on holding the button, the label is set to 0
+            // on holding the button, the label is set to i
             button.addEventListener("mousedown", () => {
                 eventHandler.nextLabel = i.toString();
             });
             button.addEventListener("mouseup", () => {
                 eventHandler.nextLabel = UNLABELED;
             });
+
+            // on mobile the touchstart and touchend events are used
+            button.addEventListener("touchstart", () => {
+                eventHandler.nextLabel = i.toString();
+            });
+            button.addEventListener("touchend", () => {
+                eventHandler.nextLabel = UNLABELED;
+            });
         }
+
+        // Connect the slider
+        const slider = document.getElementById("fpsSlider");
+        slider.addEventListener("input", () => {
+            REFRESH_RATE = parseInt(slider.value);
+        });
+
 
         document.getElementById("trainModel")
             .addEventListener("click", () => trainer.trainModel());

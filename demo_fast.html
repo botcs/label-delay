@@ -79,13 +79,14 @@
             justify-content: center;
         }
 
-        #control-panel {
+        .control-panel {
             width: 90%;
             margin: auto;
             text-align: center;
+            font-size: 2vw;
         }
 
-        #control-panel button {
+        .control-panel button {
             font-size: 2vw;
             /* margin: 0.5em; */
             /* padding: 0.5em; */
@@ -95,10 +96,10 @@
             cursor: pointer;
             font-family: 'EB Garamond', serif;
         }
-        #control-panel button:hover {
+        .control-panel button:hover {
             filter: brightness(.9);
         }
-        #control-panel button:active {
+        .control-panel button:active {
             filter: brightness(.8);
         }
 
@@ -152,6 +153,28 @@
             margin: auto;
         }
         
+        .slider {
+            -webkit-appearance: none; /* Override default styles */
+            appearance: none;
+            width: 50%; /* Full width */
+            height: 3px; /* Slider line thickness */
+            background: black; /* Slider line color */
+            outline: none; /* Remove outline */
+            opacity: 1; /* Make slider fully visible */
+            margin: 0px 20px;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none; /* Override default styles */
+            appearance: none;
+            width: 20px; /* Set the handle size */
+            height: 20px; /* Set the handle size */
+            background: white; /* Handle color */
+            border: 3px solid black; /* Remove border */
+            cursor: pointer; /* Cursor on hover */
+            border-radius: 50%; /* Make it a circle */
+        }
+        
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
@@ -167,13 +190,21 @@
     <div id="svg-container">
         <svg id="main" viewBox="0 0 1600 700"></svg>
     </div>
-    <div id="control-panel">
+    <div class="control-panel">
         <button id="addCategory0">Add Category 1</button>
         <button id="addCategory1">Add Category 2</button>
         <button id="addCategory2">Add Category 3</button>
         <button id="trainModel">Train Model</button>
         <button id="saveImages">Save Images</button>
     </div>
+    <div class="control-panel">
+        <!-- slider for fps -->
+        1 FPS
+        <input type="range" min="1" max="30" value="30" class="slider" id="fpsSlider">
+        30 FPS
+    </div>
+    
+
     <!-- <div id="eq" style="text-align: center; vertical-align: middle">
         
         θ<sup id="theta-t">t</sup> = θ<sup id="theta-t-1">t-1</sup> - ∇<sub>θ<sup id="theta-t-1">t-1</sup></sub><text style="font-size: 1.6em">[</text> L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-rnd">RND</sub>), Y<sub>RND</sub>) + L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-iwm">IWM</sub>), Y<sub>IWM</sub>)<text style="font-size: 1.6em">]</text>
