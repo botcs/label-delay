@@ -19,6 +19,7 @@ const OPTIMIZER = tf.train.sgd(LR);
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
 const ARCHITECTURE = isMobile ? "cnn_small" : "cnn_base";
+const TRAIN_REPEAT_INTERVAL = 3000;
 
 
 
@@ -1290,7 +1291,9 @@ class EventHandler {
         this.active = true;
 
         this.nextLabel = UNLABELED;
-        this.lastUpdate = performance.now();
+        this.lastRender = performance.now();
+
+        this.trainInterval = null;
     }
 
     async addDataWithoutAnimation(label=UNLABELED) {
@@ -1358,13 +1361,52 @@ class EventHandler {
         if (!this.active) {
             return;
         }
-        if (performance.now() - this.lastUpdate > 1000 / REFRESH_RATE) {   
-            this.lastUpdate = performance.now();
+        if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
+            this.lastRender = performance.now();
             this.addDataWithoutAnimation(this.nextLabel);
         }
         window.requestAnimationFrame(() => {
             this.renderLoop();
         });
+    }
+
+    toggleTraining() {
+        const button = d3.select("#trainModel");
+        
+        if (this.trainInterval === undefined) {
+            this.trainInterval = null;
+        }
+
+        if (this.trainInterval !== null) {
+            clearInterval(this.trainInterval);
+            button.style("background", `white`)
+                .text("Toggle Training")
+                .transition()
+                .duration(TRAIN_REPEAT_INTERVAL)
+                .style("background", `white`);
+            this.trainInterval = null;
+        } else {
+            button.text("Stop Training")
+            let transition = button.style("background", `linear-gradient(90deg, #6aa84f 0%, white 1%)`);
+            for (let i = 0; i < 30; i++) {
+                const percent = Math.floor(i * 100 / 30);
+                transition = transition.transition()
+                    .duration(TRAIN_REPEAT_INTERVAL / 30)
+                    .style("background", `linear-gradient(90deg, #6aa84f ${percent}%, white ${percent+1}%)`);
+            }
+
+            this.trainInterval = setInterval(async () => {
+                trainer.trainModel();
+                let transition = button.style("background", `linear-gradient(90deg, #6aa84f 0%, white 0%)`);
+                for (let i = 0; i < 30; i++) {
+                    const percent = Math.floor(i * 100 / 30);
+                    transition = await transition.transition()
+                        .duration(TRAIN_REPEAT_INTERVAL / 30)
+                        .style("background", `linear-gradient(90deg, #6aa84f ${percent}%, white ${percent}%)`);
+                }
+
+            }, TRAIN_REPEAT_INTERVAL);
+        }
     }
 }
 const eventHandler = new EventHandler();
@@ -1463,7 +1505,7 @@ document.addEventListener('DOMContentLoaded',
 
 
         document.getElementById("trainModel")
-            .addEventListener("click", () => trainer.trainModel());
+            .addEventListener("click", () => eventHandler.toggleTraining());
         document.getElementById("saveImages")
             .addEventListener("click", downloadAllImagesAsZip);
 
@@ -1475,10 +1517,16 @@ document.addEventListener('DOMContentLoaded',
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === "hidden") {
         if (eventHandler.active) {
+            console.log("Stopping the render loop");
             eventHandler.active = false;
+            if (eventHandler.trainInterval !== null) {
+                console.log("Stopping the training interval");
+                eventHandler.toggleTraining();
+            }
         }
     } else if (document.visibilityState === "visible") {
         if (!eventHandler.active) {
+            console.log("Starting the render loop");
             // Start the interval to update the pending datacard
             eventHandler.active = true;
             eventHandler.renderLoop();
