@@ -1,9 +1,8 @@
-const PENDING_SIZE = 10;
-const MEMORY_SIZE = 19;
+const PENDING_SIZE = 20;
+const MEMORY_SIZE = 40;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
-const THUMBNAIL_SIDE_LENGTH = 128;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 let REFRESH_RATE = 60;
@@ -12,14 +11,14 @@ let REFRESH_RATE = 60;
 // Machine Learning params
 ////////////////////////////////////////
 const LR = 0.005;
-const MOMENTUM = 0.0;
+// const MOMENTUM = 0.3;
 const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
 // const OPTIMIZER = tf.train.adam(LR);
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
 const ARCHITECTURE = "cnn_base";
-const TRAIN_REPEAT_INTERVAL = 3000;
+const TRAIN_REPEAT_INTERVAL = 1000;
 
 
 
@@ -1108,6 +1107,21 @@ class DOMHandler {
         }
         await Promise.all(asyncCalls);
     }
+
+    getThumbnailClientSize() {
+        if (this.pendingCards.length === 0) {
+            return {width: 480, height: 480};
+        }
+        const rect = this.pendingCards[0]
+            .imageGroup
+            .node()
+            .getBoundingClientRect();
+        
+        return {
+            width: rect.width,
+            height: rect.height
+        };
+    }
 }
 const domHandler = new DOMHandler();
 
@@ -1152,7 +1166,11 @@ async function startWebcam() {
 
 function captureWebcam() {
     const ctx = canvas.getContext('2d');
-    const outputSize = THUMBNAIL_SIDE_LENGTH;
+    
+    const outputSize = d3.max([
+        domHandler.getThumbnailClientSize().width, 
+        IMAGE_SIZE
+    ]) * 2;
 
     // Set the canvas size to the output size
     canvas.width = outputSize;
@@ -1196,7 +1214,9 @@ function captureWebcam() {
     );
 
     const dataURL = canvas.toDataURL('image/png');
+    // const dataTensor = tf.tidy(() => frameToTensor(canvas));
     const dataTensor = tf.tidy(() => frameToTensor(video));
+
     const frame = {
         dataURL: dataURL,
         Tensor: dataTensor
@@ -1344,7 +1364,7 @@ class EventHandler {
                 label = '2';
                 break;
             case 't':
-                trainer.trainModel();
+                this.toggleTraining();
                 return;
             default:
                 label = UNLABELED;
@@ -1489,9 +1509,9 @@ document.addEventListener('DOMContentLoaded',
             });
 
             // on mobile the touchstart and touchend events are used
-            button.addEventListener("touchstart", () => {
-                eventHandler.nextLabel = i.toString();
-            });
+            // button.addEventListener("touchstart", () => {
+            //     eventHandler.nextLabel = i.toString();
+            // });
             button.addEventListener("touchend", () => {
                 eventHandler.nextLabel = UNLABELED;
             });
