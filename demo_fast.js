@@ -1,5 +1,7 @@
-const PENDING_SIZE = 20;
-const MEMORY_SIZE = 40;
+// const PENDING_SIZE = 20;
+// const MEMORY_SIZE = 40;
+const PENDING_SIZE = 10;
+const MEMORY_SIZE = 20;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -10,14 +12,16 @@ let REFRESH_RATE = 60;
 ////////////////////////////////////////
 // Machine Learning params
 ////////////////////////////////////////
-const LR = 0.005;
+const LR = 0.0001;
 // const MOMENTUM = 0.3;
 const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
 // const OPTIMIZER = tf.train.adam(LR);
-const IMAGE_SIZE = 32;
+// const ARCHITECTURE = "mobilenetv3";
+// const ARCHITECTURE = "cnn_base";
+const ARCHITECTURE = "resnet18";
+const IMAGE_SIZE = ARCHITECTURE.includes("cnn") ? 32 : 32;
 const IMAGE_CHANNELS = 3;
-const ARCHITECTURE = "cnn_base";
 const TRAIN_REPEAT_INTERVAL = 1000;
 
 
@@ -47,6 +51,7 @@ class DataEntry {
         this.inData = inData; // An image or a video frame
 
         this.inData.Tensor = tf.variable(inData.Tensor);
+
         // A [NUM_CLASES] tensor representing the class probabilities
         this.pred = tf.variable(tf.squeeze(outData[0]));
 
@@ -284,64 +289,15 @@ class Trainer{
 
     async initializeModel() {
         Math.seedrandom('constant');
-        const backboneFactory = {
-            "resnet18": resNet18,
-            "mobilenetv2": mobileNetV2,
-            "cnn_base": CNN_BASE,
-            "cnn_small": CNN_SMALL
-        }[ARCHITECTURE];
-        const model = tf.tidy(() => {
-            const backbone = backboneFactory([IMAGE_SIZE, IMAGE_SIZE, IMAGE_CHANNELS]);
-            const input = backbone.input
-            const proj = tf.layers.dense({
-                units: NUM_FEATURES,
-                activation: "tanh",
-                kernelInitializer: "varianceScaling",
-                kernelRegularizer: "l1l2",
-            }).apply(backbone.output);
-            const logit = tf.layers.dense({units: NUM_CLASSES}).apply(proj);
-            
-            return tf.model({
-                inputs: input, 
-                outputs: [logit, proj]
-            });
+        this.model = new GenericModelConnector({
+            architecture: ARCHITECTURE,
+            image_size: IMAGE_SIZE,
+            image_channels: IMAGE_CHANNELS,
+            num_classes: NUM_CLASSES,
+            num_features: NUM_FEATURES,
+            optimizer: OPTIMIZER
         });
-
-        
-        
-        
-        // const optimizer = tf.train.sgd(0.005);
-        const noopLoss = (yTrue, yPred) => tf.zeros([1]);
-        await model.compile({
-            optimizer: OPTIMIZER,
-            // loss: {
-            //     pred: 'categoricalCrossentropy',
-            //     feat: noopLoss
-            // },
-            loss: ['categoricalCrossentropy', noopLoss],
-            metrics: ['accuracy']
-        });
-
-        // Warm up the model by training it once
-        const warmupData = tf.randomNormal([6, 32, 32, 3]);
-        const labels = tf.oneHot(tf.tensor1d([0,0,1,1,2,2], 'int32'), NUM_CLASSES);
-        let logits;
-        let loss;
-        await OPTIMIZER.minimize(() => {
-            logits = model.predict(warmupData)[0];
-            loss = tf.losses.softmaxCrossEntropy(labels, logits).mul(0);
-            return loss;
-        });
-
-        // clean up the tensors
-        warmupData.dispose();
-        logits.dispose();
-        labels.dispose();
-        loss.dispose();
-
-        // Summary
-        console.log(model.summary());
-        this.model = model;
+        await this.model.loadModel();
     }
 
     async trainModel() {
@@ -350,12 +306,10 @@ class Trainer{
             throw new Error("At least one labeled data entry is required");
         }
 
-
         // Train the model
         const optimizer = this.model.optimizer;
         const lossFunction = tf.losses.softmaxCrossEntropy;
-        const batchSize = 2;
-
+        
         const indices = [];
         // for (let i = 0; i < batchSize; i++) {
         //     const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
@@ -405,10 +359,12 @@ class Trainer{
                 labels: tf.oneHot(labels, NUM_CLASSES)
             }
         });
+        // const features = this.model.forwardBackbone(data.input);
         optimizer.minimize(() => {
-            const logits = this.model.predict(data.input)[0];
+            const features = this.model.forwardBackbone(data.input);
+            const logits = this.model.forwardHead(features)[0];
             const loss = lossFunction(data.labels, logits);
-            loss.print();
+            console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
             return loss;
         });
         data.input.dispose();
@@ -425,6 +381,8 @@ class Trainer{
         tf.tidy(() => {
             dataHandler.recomputeFeatures(this.model);
         });
+        console.log(`Number of tensors: ${tf.memory().numTensors}`);
+        
         await domHandler.renderDataCards();
         await domHandler.renderSimilarities();
     }
@@ -1500,21 +1458,24 @@ document.addEventListener('DOMContentLoaded',
         // Connect the buttons
         for (let i = 0 ; i < 3; i++) {
             button = document.getElementById(`addCategory${i}`);
-            // on holding the button, the label is set to i
-            button.addEventListener("mousedown", () => {
-                eventHandler.nextLabel = i.toString();
-            });
-            button.addEventListener("mouseup", () => {
-                eventHandler.nextLabel = UNLABELED;
-            });
+            if (isMobile) {
+                // on mobile the touchstart and touchend events are used
+                button.addEventListener("touchstart", () => {
+                    eventHandler.nextLabel = i.toString();
+                });
+                button.addEventListener("touchend", () => {
+                    eventHandler.nextLabel = UNLABELED;
+                });
+            } else {
+                // on holding the button, the label is set to i
+                button.addEventListener("mousedown", () => {
+                    eventHandler.nextLabel = i.toString();
+                });
+                button.addEventListener("mouseup", () => {
+                    eventHandler.nextLabel = UNLABELED;
+                });
+            }
 
-            // on mobile the touchstart and touchend events are used
-            // button.addEventListener("touchstart", () => {
-            //     eventHandler.nextLabel = i.toString();
-            // });
-            button.addEventListener("touchend", () => {
-                eventHandler.nextLabel = UNLABELED;
-            });
         }
 
         // Connect the slider

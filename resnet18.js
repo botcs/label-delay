@@ -48,7 +48,7 @@ function resNet18(inputShape, width=64) {
     x = residualBlock(x, width*8, true);
     x = residualBlock(x, width*8);
 
-    x = tf.layers.globalAveragePooling2d().apply(x);
+    x = tf.layers.globalAveragePooling2d({dataFormat: "channelsLast"}).apply(x);
 
-    return tf.model({ inputs: input, outputs: output });
+    return tf.model({ inputs: input, outputs: x });
 }
