@@ -1508,7 +1508,7 @@ class EventHandler {
         // Read the current value from the select element
         const optimizerString = d3.select("#optimizer-select").node().value;
 
-        const learningRate = parseFloat(d3.select("#learning-rate").node().value);
+        const learningRate = parseFloat(d3.select("#learning-rate-select").node().value);
 
         let optimizer;
         if (optimizerString === "momentum") {
