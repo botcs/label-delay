@@ -289,7 +289,7 @@ class ModelHandler{
         this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
 
         this.X1Policy = "random";
-        this.X2Policy = "iwm";
+        this.X2Policy = "random2";
         this.updateFeatures = true;
     }
     
@@ -856,7 +856,7 @@ class SimilarityGridHandler {
         this.renderPromise = null;
 
         this.X1Policy = "random";
-        this.X2Policy = "iwm";
+        this.X2Policy = "random2";
     }
 
     async initialize() {
