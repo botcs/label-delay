@@ -257,11 +257,11 @@
             Architecture:
             <select id="arch-select">
                 <option value="none" disabled>Select Architecture</option>
+                <option value="linear" selected>Linear</option>
                 <option value="resnet18">ResNet18</option>
+                <option value="cnn">CNN</option>
                 <option value="mobilenetv2">MobileNetV2 (ImageNet pretrained)</option>
                 <option value="mobilenetv3">MobileNetV3 (ImageNet pretrained)</option>
-                <option value="cnn">CNN</option>
-                <option value="linear" selected>Linear</option>
             </select>
             <br>
             Optimizer:
@@ -293,10 +293,10 @@
             $X_2$ selection policy:
             <select id="x2-policy-select">
                 <option value=null disabled select>X_2 selection policy</option>
-                <option value="random2">Random</option>
+                <option value="random2" selected>Random</option>
                 <option value="newest">Newest</option>
                 <option value="second-newest">Second Newest</option>
-                <option value="iwm" selected >Importance Weighted Memory</option>
+                <option value="iwm">Importance Weighted Memory</option>
             </select>
             <br>
             Update features after training:
