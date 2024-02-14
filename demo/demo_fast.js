@@ -1,7 +1,7 @@
-// const PENDING_SIZE = 20;
-// const MEMORY_SIZE = 40;
-const PENDING_SIZE = 10;
-const MEMORY_SIZE = 20;
+const PENDING_SIZE = 18;
+const MEMORY_SIZE = 40;
+// const PENDING_SIZE = 10;
+// const MEMORY_SIZE = 20;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -1236,7 +1236,7 @@ class SimilarityGridHandler {
 
         
         
-        await this.updateMemoryPositions();
+        this.updateMemoryPositions();
         if (this.memoryCards.length > 0) {
             this.renderSimilarities();
         }
