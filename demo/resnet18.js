@@ -23,7 +23,8 @@ function residualBlock(input, filters, downsample = false) {
             kernelSize: 1,
             strides: 2,
             padding: 'same',
-            kernelInitializer: 'heNormal'
+            kernelInitializer: 'heNormal',
+            activation: 'selu'
         }).apply(input);
         shortcut = tf.layers.batchNormalization().apply(shortcut);
     }

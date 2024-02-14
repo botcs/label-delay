@@ -19,7 +19,8 @@ const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.adam(LR);
 // const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
-const ARCHITECTURE = "resnet18";
+// const ARCHITECTURE = "resnet18";
+const ARCHITECTURE = "linear";
 const IMAGE_SIZE = ARCHITECTURE.includes("cnn") ? 32 : 32;
 const IMAGE_CHANNELS = 3;
 const TRAIN_REPEAT_INTERVAL = 1000;
@@ -34,10 +35,11 @@ video.setAttribute('muted', 'true'); // Mute the video to allow autoplay without
 video.setAttribute('playsinline', 'true'); // This attribute is important for autoplay in iOS
 
 const canvas = document.getElementById('aux-canvas');
-const svg = d3.select("#main")
+const mainSvg = d3.select("#similarity-grid");
+const predSvg = d3.select("#prediction-card");
 
 // Define the clipping path
-const clip = svg.append("defs")
+const clip = mainSvg.append("defs")
     .append("clipPath")
     .attr("id", "clip-rounded-rect")
     .append("rect")
@@ -53,7 +55,7 @@ class DataEntry {
         this.inData.Tensor = tf.variable(inData.Tensor);
 
         // A [NUM_CLASES] tensor representing the class probabilities
-        this.pred = tf.variable(tf.squeeze(outData[0]));
+        this.pred = tf.variable(tf.squeeze(tf.softmax(outData[0])));
 
         // A [NUM_FEATURES] tensor representing the feature vector
         const feat = outData[1];
@@ -79,7 +81,8 @@ class DataEntry {
             return;
         }
         this.inData.Tensor.assign(inData.Tensor);
-        this.pred.assign(tf.squeeze(outData[0]));
+        const pred = tf.softmax(outData[0]);
+        this.pred.assign(tf.squeeze(pred));
         const feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
     }
@@ -276,28 +279,59 @@ const dataHandler = new DataHandler();
 
 
 
-class Trainer{
+class ModelHandler{
     constructor(dataHandler) {
         this.model = null;
         this.dataHandler = dataHandler;
-        this.numIterations = 0;
         this.seed = 42;
         this.prevLabel = null;
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+
+        this.X1Policy = "random";
+        this.X2Policy = "iwm";
+        this.updateFeatures = true;
     }
     
 
-    async initializeModel() {
+    async initializeModel({
+        architecture = ARCHITECTURE,
+        image_size = IMAGE_SIZE,
+        image_channels = IMAGE_CHANNELS,
+        num_classes = NUM_CLASSES,
+        num_features = NUM_FEATURES,
+        optimizer = OPTIMIZER
+    } = {}) {
         Math.seedrandom('constant');
+        console.log(`Seed: ${this.seed}`);
+        console.log(`Initialising model with following parameters:`)
+        console.log(`Architecture: ${architecture}`);
+        console.log(`Input Image Size: ${image_size}`);
+        console.log(`Image Channels: ${image_channels}`);
+        console.log(`Number of Classes: ${num_classes}`);
+        console.log(`Number of Features: ${num_features}`);
+        console.log(`Optimizer: ${optimizer}`);
+        
         this.model = new GenericModelConnector({
-            architecture: ARCHITECTURE,
-            image_size: IMAGE_SIZE,
-            image_channels: IMAGE_CHANNELS,
-            num_classes: NUM_CLASSES,
-            num_features: NUM_FEATURES,
-            optimizer: OPTIMIZER
+            architecture: architecture,
+            image_size: image_size,
+            image_channels: image_channels,
+            num_classes: num_classes,
+            num_features: num_features,
+            optimizer: optimizer
         });
         await this.model.loadModel();
+        this.numIterations = 0;
+
+        similarityGridHandler.THETA_T.text(this.numIterations)
+            .append("tspan")
+            .attr("dy", "0.5em")
+            .text("=train(");
+
+    }
+
+    async changeOptimizer(optimizer) {
+        this.model.optimizer = optimizer;
     }
 
     async trainModel() {
@@ -310,42 +344,49 @@ class Trainer{
         const optimizer = this.model.optimizer;
         const lossFunction = tf.losses.softmaxCrossEntropy;
         
-        const indices = [];
-        // for (let i = 0; i < batchSize; i++) {
-        //     const idx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-        //     indices.push(idx);
+        // const indices = [];
+        // // find memory samples that are not the same as the previous label
+        // const availableIndices = [];
+        // for (let i = 0; i < dataHandler.memoryEntries.length; i++) {
+        //     if (this.prevLabel !== dataHandler.memoryEntries[i].label) {
+        //         availableIndices.push(i);
+        //     }
         // }
-        // let randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-        // while (this.prevLabel === dataHandler.memoryEntries[randomIdx].label) {
+        
+        // let randomIdx;
+        // if (availableIndices.length === 0) {
         //     randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        // } else {
+        //     randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
         // }
+        
+        // this.prevLabel = dataHandler.memoryEntries[randomIdx].label;
+        // console.log(`randomIdx: ${randomIdx}, prevLabel: ${this.prevLabel}`);
+        // this.randomIdx = randomIdx;
+        // indices.push(randomIdx);
 
-        // find memory samples that are not the same as the previous label
-        const availableIndices = [];
-        for (let i = 0; i < dataHandler.memoryEntries.length; i++) {
-            if (this.prevLabel !== dataHandler.memoryEntries[i].label) {
-                availableIndices.push(i);
-            }
-        }
-        
-        let randomIdx;
-        if (availableIndices.length === 0) {
-            randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-        } else {
-            randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-        }
-        
-        this.prevLabel = dataHandler.memoryEntries[randomIdx].label;
-        console.log(`randomIdx: ${randomIdx}, prevLabel: ${this.prevLabel}`);
-        this.randomIdx = randomIdx;
-        indices.push(randomIdx);
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
         
 
         // Read the IWM index from DataHandler
-        const iwmIdx = dataHandler.scores.argMax(1).dataSync()[0];
-        console.log(`randomIdx: ${randomIdx}, iwmIdx: ${iwmIdx}`);
-        indices.push(iwmIdx);
+        const iwmIdx = tf.tidy(() => dataHandler.scores.argMax(1).dataSync()[0]);
         
+
+        const idxCatalog = {
+            "newest": 0,
+            "second-newest": d3.min([1, dataHandler.memorySize-1]),
+            "iwm": iwmIdx,
+            "random": this.randomIdx,
+            "random2": this.randomIdx2
+        }
+
+        const idx1 = idxCatalog[this.X1Policy];
+        const idx2 = idxCatalog[this.X2Policy];
+
+        const indices = [idx1, idx2];
+
+
         const data = tf.tidy(() => {
             const input = [];
             const labels = [];
@@ -359,35 +400,49 @@ class Trainer{
                 labels: tf.oneHot(labels, NUM_CLASSES)
             }
         });
-        // const features = this.model.forwardBackbone(data.input);
-        optimizer.minimize(() => {
+
+        const useFrozenBackbone = this.model.architecture.includes("mobilenet");
+        if ( useFrozenBackbone) {
             const features = this.model.forwardBackbone(data.input);
-            const logits = this.model.forwardHead(features)[0];
-            const loss = lossFunction(data.labels, logits);
-            console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
-            return loss;
-        });
+            // Just exclude the backbone from the optimization
+            optimizer.minimize(() => {
+                const logits = this.model.forwardHead(features)[0];
+                const loss = lossFunction(data.labels, logits);
+                console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                return loss;
+            });
+        } else {
+            optimizer.minimize(() => {
+                const features = this.model.forwardBackbone(data.input);
+                const logits = this.model.forwardHead(features)[0];
+                const loss = lossFunction(data.labels, logits);
+                console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                return loss;
+            });
+        }
         data.input.dispose();
         data.labels.dispose();
 
         this.numIterations++;
-        domHandler.THETA_T.text(this.numIterations)
+        similarityGridHandler.THETA_T.text(this.numIterations)
             .append("tspan")
             .attr("dy", "0.5em")
             .text("=train(");
-        // d3.selectAll("#theta-t").text(this.numIterations);
 
-        // Update all the features
-        tf.tidy(() => {
-            dataHandler.recomputeFeatures(this.model);
-        });
-        console.log(`Number of tensors: ${tf.memory().numTensors}`);
-        
-        await domHandler.renderDataCards();
-        await domHandler.renderSimilarities();
+
+        if (this.updateFeatures) {
+            // Update all the features
+            tf.tidy(() => {
+                dataHandler.recomputeFeatures(this.model);
+            });
+            // console.log(`Number of tensors: ${tf.memory().numTensors}`);
+            
+            similarityGridHandler.renderDataCards();
+            similarityGridHandler.renderSimilarities();
+        }
     }
 }
-const trainer = new Trainer(dataHandler);
+const modelHandler = new ModelHandler(dataHandler);
 
 ////////////////////////////////////////
 // FRONTEND
@@ -443,7 +498,7 @@ class DataCard {
 
     async _createDOM(parentGroup = null) {
         if (parentGroup === null) {
-            parentGroup = svg;
+            parentGroup = mainSvg;
         }
         const mainGroup = parentGroup
             .append("g");
@@ -624,12 +679,151 @@ class DataCard {
             .style("opacity", 0)
             .remove();
     }
-
 }
 
+class PredCard {
+    constructor(dataEntry, position = {x: 0, y: 0}) {
+        this.dataEntry = dataEntry;
+        this.position = position;
+        this.renderPromise = null;
+    }
+
+    async createDOM(parentGroup = null) {
+        if (this.renderPromise !== null) {
+            return this.renderPromise;
+        }
+        this.renderPromise = this._createDOM(parentGroup);
+        await this.renderPromise;
+        this.renderPromise = null;
+    }
+
+    async _createDOM(parentGroup = null) {
+        if (parentGroup === null) {
+            parentGroup = predSvg;
+        }
+        const mainGroup = parentGroup
+            .append("g")
+            .attr("transform", `translate(${this.position.x}, ${this.position.y})`);
+        
+        const background = mainGroup.append("rect")
+            .classed("predcard-background", true)
+            .attr("width", DataCard.unitSize / NUM_CLASSES)
+            .attr("height", DataCard.unitSize)
+            .attr("rx", 10)
+            .attr("ry", 10);
+
+        this.mainGroup = mainGroup;
+        this.background = background;
+        this.rendered = true;
+    }
+
+    async updateDOM() {
+        if (!this.rendered) {
+            return;
+        }
+        if (this.renderPromise !== null) {
+            return this.renderPromise;
+        }
+        this.renderPromise = this._updateDOM();
+        await this.renderPromise;
+        this.renderPromise = null;
+    }
+    async _updateDOM() {
+        // represent each class with a circle of different color
+        const pred = await this.dataEntry.pred.data();
+        const maxPredVal = d3.max(pred);
+        const circleRadii = [];
+        for (let i = 0; i < pred.length; i++) {
+            circleRadii.push(pred[i] / maxPredVal * DataCard.maxCircleRadius);
+        }
+
+        const fillColors = ["#f9cb9c", "#a4c2f4", "#b6d7a8"];
+        const strokeColors = ["#e69138", "#3c78d8","#6aa84f"];
+
+        // The circles are in a single column
+        this.mainGroup.selectAll("circle")
+            .data(circleRadii)
+            .join("circle")
+            .attr("cx", DataCard.unitSize / NUM_CLASSES / 2)
+            .attr("cy", (d, i) => i * DataCard.unitSize / NUM_CLASSES + DataCard.unitSize / NUM_CLASSES / 2)
+            .attr("r", d => d)
+            .attr("fill", (d, i) => fillColors[i])
+            .attr("stroke", (d, i) => strokeColors[i])
+            .attr("stroke-width", 2);
+    }
+}
+
+class PredCardHandler {
+    constructor(dataHandler) {
+        this.dataHandler = dataHandler;
+        this.predCard = null;
+        this.dataCard = null;
+
+        this.renderPromise = null;
+    }
+
+    async createDOM() {
+        const offset = {x: 5, y: 5};
+
+        this.mainGroup = predSvg.append("g");
+
+        this.dataCard = new DataCard(
+            this.dataHandler.pendingEntries[0], 
+            {x: offset.x, y: offset.y},
+            "horizontal"
+        );
+        await this.dataCard.createDOM(this.mainGroup);
+        
+        this.predCard = new PredCard(
+            this.dataHandler.pendingEntries[0], 
+            {
+                x: this.dataCard.layout.shape.width*1.05 + offset.x,
+                y: offset.y,
+            }
+        );
+        await this.predCard.createDOM(this.mainGroup);
+        await this.predCard.updateDOM();
+
+        this.mainGroup.append("text")
+            .text("input")
+            .attr("x", offset.x + DataCard.unitSize/2)
+            .attr("y", offset.y + DataCard.unitSize*1.1)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "hanging")
+            .attr("font-size", "1.5em")
+
+        this.mainGroup.append("text")
+            .text("feat")
+            .attr("x", offset.x + DataCard.unitSize*1.5)
+            .attr("y", offset.y + DataCard.unitSize*1.1)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "hanging")
+            .attr("font-size", "1.5em")
+
+        this.mainGroup.append("text")
+            .text("pred")
+            .attr("x", this.predCard.position.x + DataCard.unitSize/NUM_CLASSES/2)
+            .attr("y", offset.y + DataCard.unitSize*1.1)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "hanging")
+            .attr("font-size", "1.5em")
+
+            
+
+    }
+
+    async updateDOM() {
+        this.dataCard.dataEntry = this.dataHandler.pendingEntries[0];
+        this.predCard.dataEntry = this.dataHandler.pendingEntries[0];
+
+        await this.dataCard.updateDOM();
+        await this.predCard.updateDOM();
+    }
+}
+const predCardHandler = new PredCardHandler(dataHandler);
 
 
-class DOMHandler {
+class SimilarityGridHandler {
     constructor(
         memorySize = MEMORY_SIZE, 
         pendingSize = PENDING_SIZE, 
@@ -658,15 +852,16 @@ class DOMHandler {
         this.equationHeight = DataCard.unitSize*2;
 
         // set the viewbox of the svg
-        svg.attr("viewBox", `0 0 ${this.boardWidth} ${this.boardHeight + this.equationHeight}`);
-        
-        this.initialize();
+        mainSvg.attr("viewBox", `0 0 ${this.boardWidth} ${this.boardHeight + this.equationHeight}`);
         this.renderPromise = null;
+
+        this.X1Policy = "random";
+        this.X2Policy = "iwm";
     }
 
     async initialize() {
         this.setDOMPositions();
-        this.mainGroup = svg.append("g")
+        this.mainGroup = mainSvg.append("g")
             .attr("id", "DOMHandler")
             .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
         
@@ -741,7 +936,7 @@ class DOMHandler {
             .attr("dy", "0.5em")
             .text("=train(");
 
-        this.X_RND = this.mainGroup.append("text")
+        this.X_1 = this.mainGroup.append("text")
             .attr("id", "X_RND")
             .style("font-size", "3em")
             .style("text-anchor", "middle")
@@ -749,13 +944,13 @@ class DOMHandler {
             .attr("x", this.boardWidth*0.5)
             .attr("y", this.boardHeight + DataCard.unitSize)
             .text("X");
-        this.X_RND.append("tspan")
+        this.X_1.append("tspan")
             .attr("dy", "0.5em")
-            .text("RND")
+            .text("1")
             .append("tspan")
             .attr("dy", "-0.5em")
             .text(",");
-        this.X_IWM = this.mainGroup.append("text")
+        this.X_2 = this.mainGroup.append("text")
             .attr("id", "X_IWM")
             .style("font-size", "3em")
             .style("text-anchor", "middle")
@@ -763,9 +958,9 @@ class DOMHandler {
             .attr("x", this.boardWidth*0.7)
             .attr("y", this.boardHeight + DataCard.unitSize)
             .text("X");
-        this.X_IWM.append("tspan")
+        this.X_2.append("tspan")
             .attr("dy", "0.5em")
-            .text("IWM")
+            .text("2")
             .append("tspan")
             .attr("dy", "-0.5em")
             .text(")");
@@ -836,7 +1031,7 @@ class DOMHandler {
         toP.y = parseInt(toP.y);
         const path = d3.path();
         path.moveTo(fromP.x, fromP.y);
-        const sharpness = 0.5;
+        const sharpness = 0.9;
         const control1X = fromP.x;
         const control1Y = fromP.y + sharpness * (toP.y - fromP.y);
         const control2X = toP.x;
@@ -844,6 +1039,7 @@ class DOMHandler {
 
         // path.quadraticCurveTo(controlX, controlY, toP.x, toP.y);
         path.bezierCurveTo(control1X, control1Y, control2X, control2Y, toP.x, toP.y);
+
         return path.toString();
     }
 
@@ -906,7 +1102,7 @@ class DOMHandler {
         }
     
         // find out if new values are added
-        let duration = 100;
+        let duration = 10;
         if (this.similarityGroup.selectAll("rect").size() < scores.flat().length) {
             duration = 0;
         }
@@ -937,48 +1133,58 @@ class DOMHandler {
             .attr("ry", 10);
         
         // Draw arrows from max similarity to the equation
-        if (this.arrowIWM === undefined) {
-            this.arrowIWM = svg.append("path")
+        if (this.arrowX1 === undefined) {
+            this.arrowX1 = mainSvg.append("path")
                 .attr("stroke", "red")
                 .attr("stroke-width", 6)
                 .attr("fill", "none");
         }
-        if (this.arrowRND === undefined) {
-            this.arrowRND = svg.append("path")
+        if (this.arrowX2 === undefined) {
+            this.arrowX2 = mainSvg.append("path")
                 .attr("stroke", "red")
                 .attr("stroke-width", 6)
                 .attr("fill", "none");
         }
 
-        const RNDCard = this.memoryCards[trainer.randomIdx];
-        const startRND = {
-            x: RNDCard.position.x + RNDCard.layout.shape.width / 2,
+        
+        // Define memory indices to pick from depending on polciy
+        const idxCatalog = {
+            "newest": 0,
+            "second-newest": d3.min([1, this.memorySize - 1]),
+            "iwm": d3.min([maxIndices[0], this.memorySize - 1]),
+            "random": modelHandler.randomIdx,
+            "random2": modelHandler.randomIdx2
+        }
+        const X1Idx = idxCatalog[this.X1Policy];
+        const X1Card = this.memoryCards[X1Idx];
+        const startX1 = {
+            x: X1Card.position.x + X1Card.layout.shape.width / 2,
             y: this.gridY(this.pendingSize) + DataCard.unitSize * 1.5
         }
-        const endRND = {
-            x: parseInt(this.X_RND.attr("x")),
-            y: parseInt(this.X_RND.attr("y"))
+        const endX1 = {
+            x: parseInt(this.X_1.attr("x")),
+            y: parseInt(this.X_1.attr("y"))
         }
-        this.arrowRND.transition()
-            .duration(150)
-            .attr("d", this.createVertConnector(startRND, endRND));
-
-
-
+        this.arrowX1.transition()
+        .duration(150)
+        .attr("d", this.createVertConnector(startX1, endX1));
+        
+        
         // start is the bottom of the selected MemoryCard
-        const IWMIdx = d3.min([maxIndices[0], this.memorySize - 1]);
-        const IWMCard = this.memoryCards[IWMIdx];
-        if (IWMCard !== undefined) {
+        // const X2Idx = d3.min([maxIndices[0], this.memorySize - 1]);
+        const X2Idx = idxCatalog[this.X2Policy];
+        const X2Card = this.memoryCards[X2Idx];
+        if (X2Card !== undefined) {
             const start = {
-                x: IWMCard.position.x + IWMCard.layout.shape.width / 2,
+                x: X2Card.position.x + X2Card.layout.shape.width / 2,
                 y: this.gridY(this.pendingSize) + DataCard.unitSize * 1.5
             }
             // end is the top of the "X_IWM"
             const end = {
-                x: parseInt(this.X_IWM.attr("x")),
-                y: parseInt(this.X_IWM.attr("y"))
+                x: parseInt(this.X_2.attr("x")),
+                y: parseInt(this.X_2.attr("y"))
             }
-            this.arrowIWM.transition()
+            this.arrowX2.transition()
                 .duration(100)
                 .attr("d", this.createVertConnector(start, end));
         }
@@ -1081,7 +1287,7 @@ class DOMHandler {
         };
     }
 }
-const domHandler = new DOMHandler();
+const similarityGridHandler = new SimilarityGridHandler();
 
 
 function frameToTensor(source) {
@@ -1126,7 +1332,7 @@ function captureWebcam() {
     const ctx = canvas.getContext('2d');
     
     const outputSize = d3.max([
-        domHandler.getThumbnailClientSize().width, 
+        similarityGridHandler.getThumbnailClientSize().width, 
         IMAGE_SIZE
     ]) * 2;
 
@@ -1202,8 +1408,8 @@ async function loadImage(url) {
 }
 
 async function createDataCard(label = UNLABELED, url = null) {
-    if (domHandler.renderPromise !== null) {
-        await domHandler.renderPromise;
+    if (similarityGridHandler.renderPromise !== null) {
+        await similarityGridHandler.renderPromise;
         
     }
     let inData;
@@ -1216,13 +1422,13 @@ async function createDataCard(label = UNLABELED, url = null) {
         if (url === null) {
             inData = captureWebcam();
         } 
-        const outData = trainer.model.predict(inData.Tensor);
+        const outData = modelHandler.model.predict(inData.Tensor);
         const dataEntry = new DataEntry(inData, outData, label);
         dataHandler.addDataEntry(dataEntry);
         return dataEntry;
     });
     
-    await domHandler.addDataCard(dataEntry);
+    await similarityGridHandler.addDataCard(dataEntry);
     console.log(`Added datacard with label ${label}`);
 }
 
@@ -1231,7 +1437,7 @@ async function updatePendingDataCard(idx) {
     // measure the time it takes to update the pending datacard
     const start = performance.now();
     
-    if (domHandler.pendingCards.length === 0) {
+    if (similarityGridHandler.pendingCards.length === 0) {
         return;
     }
 
@@ -1248,15 +1454,15 @@ async function updatePendingDataCard(idx) {
             dataEntry.updateData(inData, null);
             return;
         }
-        const outData = trainer.model.predict(inData.Tensor);
+        const outData = modelHandler.model.predict(inData.Tensor);
         dataEntry.updateData(inData, outData);
         dataHandler.updateSimilaritiesRow(idx);
     });
     image_hash = await dataHandler.pendingEntries[idx].inData.Tensor.data();
     // hash image to compare with the previous image
 
-    await domHandler.renderSimilarities();
-    await domHandler.pendingCards[idx].updateDOM();
+    await similarityGridHandler.renderSimilarities();
+    await similarityGridHandler.pendingCards[idx].updateDOM();
     const end = performance.now();
 
     // benchmark the time it takes to update the pending datacard
@@ -1272,7 +1478,77 @@ class EventHandler {
         this.lastRender = performance.now();
 
         this.trainInterval = null;
+
     }
+
+    async reinitializeModel() {
+        // Read the current value from the select element
+        const architecture = d3.select("#arch-select").node().value;
+
+        // Stop new data from being added
+        this.active = false;
+
+        // Re-initialize the model
+        // This is used when the architecture is changed
+        await modelHandler.initializeModel({architecture: architecture});
+
+        // Re-compute features for all data entries
+        await dataHandler.recomputeFeatures(modelHandler.model);
+
+        // Re-render the datacards and the similarities
+        await similarityGridHandler.renderDataCards();
+        await similarityGridHandler.renderSimilarities();
+
+        // Allow new data to be added
+        this.active = true;
+        this.renderLoop();
+    }
+
+    changeOptimizer() {
+        // Read the current value from the select element
+        const optimizerString = d3.select("#optimizer-select").node().value;
+
+        const learningRate = parseFloat(d3.select("#learning-rate").node().value);
+
+        let optimizer;
+        if (optimizerString === "momentum") {
+            optimizer = tf.train.momentum(
+                learningRate, 0.9
+            );
+        } else {
+            optimizer = {
+                "adam": tf.train.adam,
+                "sgd": tf.train.sgd
+            }[optimizerString](learningRate);
+        }
+        
+        modelHandler.changeOptimizer(optimizer);
+    }
+
+    changeSelectionPolicy() {
+        const policy1 = d3.select("#x1-policy-select").node().value;
+        const policy2 = d3.select("#x2-policy-select").node().value;
+
+        modelHandler.randomIdx = Math.floor(Math.random() * dataHandler.memorySize);
+        modelHandler.randomIdx2 = Math.floor(Math.random() * dataHandler.memorySize);
+
+        console.log(`randomIdx: ${modelHandler.randomIdx}`);
+        console.log(`randomIdx2: ${modelHandler.randomIdx2}`);
+
+
+        similarityGridHandler.X1Policy = policy1;
+        similarityGridHandler.X2Policy = policy2;
+
+        modelHandler.X1Policy = policy1;
+        modelHandler.X2Policy = policy2;
+    }
+
+    changeFeatureUpdatePolicy() {
+        const policy = d3.select("#update-features-select").node().value;
+        modelHandler.updateFeatures = policy === true;
+    }
+
+        
 
     async addDataWithoutAnimation(label=UNLABELED) {
         if (this.renderPromise !== null) {
@@ -1290,7 +1566,7 @@ class EventHandler {
         // but only moving the content and not the DOM elements
         tf.tidy(() => {
             const inData = captureWebcam();
-            const outData = trainer.model.predict(inData.Tensor);
+            const outData = modelHandler.model.predict(inData.Tensor);
             const dataEntry = new DataEntry(inData, outData, label);
             
             // this handles all the shifting
@@ -1299,14 +1575,18 @@ class EventHandler {
 
         // Update the DOM links
         for (let i = 0; i < PENDING_SIZE; i++) {
-            domHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
+            similarityGridHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
         }
         for (let i = 0; i < MEMORY_SIZE; i++) {
-            domHandler.memoryCards[i].dataEntry = dataHandler.memoryEntries[i];
+            similarityGridHandler.memoryCards[i].dataEntry = dataHandler.memoryEntries[i];
         }
+
+
         
-        await domHandler.renderDataCards(),
-        await domHandler.renderSimilarities()
+        await Promise.all([
+            similarityGridHandler.renderDataCards(),
+            similarityGridHandler.renderSimilarities(),
+        ]);
     }
 
     async keydown(event) {
@@ -1342,6 +1622,7 @@ class EventHandler {
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
             this.lastRender = performance.now();
             this.addDataWithoutAnimation(this.nextLabel);
+            predCardHandler.updateDOM();
         }
         window.requestAnimationFrame(() => {
             this.renderLoop();
@@ -1374,7 +1655,7 @@ class EventHandler {
             }
 
             this.trainInterval = setInterval(async () => {
-                trainer.trainModel();
+                modelHandler.trainModel();
                 let transition = button.style("background", `linear-gradient(90deg, #6aa84f 0%, white 0%)`);
                 for (let i = 0; i < 30; i++) {
                     const percent = Math.floor(i * 100 / 30);
@@ -1448,13 +1729,6 @@ function downloadAllImagesAsZip() {
 // Initialize the webcam on page load
 document.addEventListener('DOMContentLoaded', 
     async () => {
-        await Promise.all([
-            trainer.initializeModel(),
-            startWebcam(),
-        ]);
-        // await createDataCard();
-        await fillSlots();
-
         // Connect the buttons
         for (let i = 0 ; i < 3; i++) {
             button = document.getElementById(`addCategory${i}`);
@@ -1489,6 +1763,32 @@ document.addEventListener('DOMContentLoaded',
             .addEventListener("click", () => eventHandler.toggleTraining());
         document.getElementById("saveImages")
             .addEventListener("click", downloadAllImagesAsZip);
+
+
+        document.getElementById("arch-select")
+            .addEventListener("change", () => eventHandler.reinitializeModel());
+        document.getElementById("optimizer-select")
+            .addEventListener("change", () => eventHandler.changeOptimizer());
+        document.getElementById("learning-rate-select")
+            .addEventListener("change", () => eventHandler.changeOptimizer());
+        document.getElementById("x1-policy-select")
+            .addEventListener("change", () => eventHandler.changeSelectionPolicy());
+        document.getElementById("x2-policy-select")
+            .addEventListener("change", () => eventHandler.changeSelectionPolicy());
+        document.getElementById("features-select")
+            .addEventListener("change", () => eventHandler.changeFeatureUpdatePolicy());
+            
+
+        await Promise.all([
+            similarityGridHandler.initialize(),
+            modelHandler.initializeModel(),
+            startWebcam(),
+        ]);
+        
+        // await createDataCard();
+        await fillSlots();
+        await predCardHandler.createDOM();
+    
 
         eventHandler.renderLoop();
     }

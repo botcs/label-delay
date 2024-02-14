@@ -67,16 +67,24 @@
             stroke-width: 2px;
         }
 
+        .predcard-background {
+            fill: #f0f0f0;
+            stroke: #000;
+            stroke-width: 1px;
+            stroke-dasharray: 5, 5;
+        }
+
         body {
             font-family: 'EB Garamond', serif;
         }
 
-        #svg-container {
-            /* width: 90%; */
-            height: 90vh;
+        .svg-container {
+            width: 90%;
+            /* height: 90vh; */
             display: flex;
             margin: auto;
             justify-content: center;
+            padding: 1em;
         }
 
         .control-panel {
@@ -84,6 +92,9 @@
             margin: auto;
             text-align: center;
             font-size: 2vw;
+            margin-top: 1em;
+            display: flex;
+            /* justify-content: space-around; */
         }
 
         .control-panel button {
@@ -101,6 +112,15 @@
         }
         .control-panel button:active {
             filter: brightness(.8);
+        }
+
+
+        .low-level-controls {
+            /* display: flex; */
+            /* justify-content: space-around; */
+            text-align: right;
+            width: 45%;
+            font-size: 1.5vw;
         }
 
         #addCategory0 {
@@ -145,6 +165,10 @@
             text-align: center;
         }
 
+        h2 {
+            text-align: center;
+        }
+
         h3 {
             margin-bottom: 0.25em;
         }
@@ -156,6 +180,7 @@
         #explanation {
             width: 70%;
             margin: auto;
+            margin-top: 20vh;
         }
         
         .slider {
@@ -179,6 +204,24 @@
             cursor: pointer; /* Cursor on hover */
             border-radius: 50%; /* Make it a circle */
         }
+
+        select {
+            width: 40%;
+            font-size: 1.5vw;
+            /* padding: 0.5em; */
+            border-radius: 0.5em;
+            border: 2px solid gray;
+            font-family: 'EB Garamond', serif;
+            text-align-last: center;
+            margin: 0.1em;
+        }
+
+        select:hover {
+            border: 2px solid #3c78d8;
+            filter: brightness(0.9);
+        }
+
+
         
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -189,13 +232,18 @@
     <script src="mobilenetv2.js"></script>
     <script src="mobilenetv3.js"></script>
     <script src="cnn.js"></script>
+    <script src="linear.js"></script>
     <script src="utils.js"></script>
+
 </head>
 
 <body>
-    <h1>Importance Weighted Memory Sampling (IWM)</h1>
-    <div id="svg-container">
-        <svg id="main" viewBox="0 0 1600 700"></svg>
+    <h1>Label Delay in Online Continual Learning</h1>
+    <div class="svg-container">
+        <svg id="prediction-card" style="width: 40%;" viewBox="0 0 255 150"></svg>
+    </div>
+    <div class="svg-container">
+        <svg id="similarity-grid" viewBox="0 0 1600 700"></svg>
     </div>
     <div class="control-panel">
         <button id="addCategory0">Add Category 1</button>
@@ -205,10 +253,67 @@
         <button id="saveImages">Save Images</button>
     </div>
     <div class="control-panel">
-        <!-- slider for fps -->
-        1 FPS
-        <input type="range" min="1" max="30" value="30" class="slider" id="fpsSlider">
-        30 FPS
+        <div class="low-level-controls">
+            Architecture:
+            <select id="arch-select">
+                <option value="none" disabled>Select Architecture</option>
+                <option value="resnet18">ResNet18</option>
+                <option value="mobilenetv2">MobileNetV2 (ImageNet pretrained)</option>
+                <option value="mobilenetv3">MobileNetV3 (ImageNet pretrained)</option>
+                <option value="cnn">CNN</option>
+                <option value="linear" selected>Linear</option>
+            </select>
+            <br>
+            Optimizer:
+            <select id="optimizer-select">
+                <option value="none" disabled>Select Optimizer</option>
+                <option value="sgd" selected>SGD</option>
+                <option value="momentum">Momentum (0.9)</option>
+                <option value="adam">Adam</option>
+            </select>
+            <br>
+            Learning Rate:
+            <select id="learning-rate-select">
+                <option value="none" disabled>Select Learning Rate</option>
+                <option value="0.001" selected>0.001</option>
+                <option value="0.01">0.01</option>
+                <option value="0.1">0.1</option>
+            </select>
+        </div>
+        <div class="low-level-controls">
+            $X_1$ selection policy:
+            <select id="x1-policy-select">
+                <option value=null disabled select>X_1 selection policy</option>
+                <option value="random" selected>Random</option>
+                <option value="newest">Newest</option>
+                <option value="second-newest">Second Newest</option>
+                <option value="iwm">Importance Weighted Memory</option>
+            </select>
+            <br>
+            $X_2$ selection policy:
+            <select id="x2-policy-select">
+                <option value=null disabled select>X_2 selection policy</option>
+                <option value="random2">Random</option>
+                <option value="newest">Newest</option>
+                <option value="second-newest">Second Newest</option>
+                <option value="iwm" selected >Importance Weighted Memory</option>
+            </select>
+            <br>
+            Update features after training:
+            <select id="features-select">
+                <option value=null disabled select>Update features</option>
+                <option value=true selected>True</option>
+                <option value=false>False</option>
+            </select>
+        </div>
+    </div>
+    <div class="control-panel">
+        <div style="text-align: center; width: 100%;">
+            Limit refresh rate:
+            1 FPS
+            <input type="range" min="1" max="30" value="30" class="slider" id="fpsSlider">
+            30 FPS
+        </div>
     </div>
     
 
@@ -217,13 +322,13 @@
         θ<sup id="theta-t">t</sup> = θ<sup id="theta-t-1">t-1</sup> - ∇<sub>θ<sup id="theta-t-1">t-1</sup></sub><text style="font-size: 1.6em">[</text> L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-rnd">RND</sub>), Y<sub>RND</sub>) + L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-iwm">IWM</sub>), Y<sub>IWM</sub>)<text style="font-size: 1.6em">]</text>
     </div> -->
     <div id="video-container" style="visibility: hidden;">
-        <video id="webcam" autoplay></video>
+        <video id="webcam" autoplay style="display: none;"></video>
         <canvas id="aux-canvas" style="display: none;"></canvas>
     </div>
     <script src="demo_fast.js"></script>
     <div id="explanation">
         <h2>
-            Explanation:
+            How to use this demo:
         </h2>
         <p>
             This demo shows an instance of the label delay problem.

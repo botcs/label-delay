@@ -22,6 +22,7 @@ class customModelConnector {
             "cnn_small": CNN_SMALL,
             "cnn_large": CNN_LARGE,
             "resnet18": resNet18,
+            "linear": Linear,
         }[this.architecture];
         const backbone = await backboneFactory([
             this.image_size,
@@ -105,18 +106,26 @@ class TFHubModelConnector {
 
     async loadModel() {
         const modelURL = {
-            // "mobilenetv2": "https://tfhub.dev/google/imagenet/mobilenet_v2_100_224/feature_vector/4",
-            // "mobilenetv3": "https://tfhub.dev/google/imagenet/mobilenet_v3_small_100_224/feature_vector/5"
+            "mobilenetv2": "https://www.kaggle.com/models/google/mobilenet-v2/frameworks/TfJs/variations/140-224-feature-vector/versions/3",
             "mobilenetv3": "https://www.kaggle.com/models/google/mobilenet-v3/frameworks/TfJs/variations/small-100-224-feature-vector/versions/1"
         }[this.architecture];
         const backbone = await tf.loadGraphModel(modelURL, {fromTFHub: true});
         this.backbone = backbone;
 
-        this.featureInput = tf.input({shape: [1024]});
+        const outputDim = {
+            "mobilenetv2": 1792,
+            "mobilenetv3": 1024,
+        }[this.architecture];
+
+        this.featureInput = tf.input({shape: [outputDim]});
+
+        // add layer norm
+        const x = tf.layers.layerNormalization().apply(this.featureInput);
+
         this.proj = tf.layers.dense({
             units: this.num_features,
             activation: "selu",
-        }).apply(this.featureInput);
+        }).apply(x);
 
         this.logit = tf.layers.dense({
             units: this.num_classes
