@@ -1677,6 +1677,8 @@ async function fillSlots(useWebcam=true) {
         for (let i = 0; i < PENDING_SIZE+MEMORY_SIZE; i++) {
             await createDataCard(0);
         }
+        modelHandler.randomIdx = Math.floor(Math.random() * dataHandler.memorySize);
+        modelHandler.randomIdx2 = Math.floor(Math.random() * dataHandler.memorySize);
     } else {
         // Randomly select images from the dataset to fill all slot
         const data = [];
