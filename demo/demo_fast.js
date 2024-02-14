@@ -1544,7 +1544,7 @@ class EventHandler {
     }
 
     changeFeatureUpdatePolicy() {
-        const policy = d3.select("#update-features-select").node().value;
+        const policy = d3.select("#features-select").node().value;
         modelHandler.updateFeatures = policy === true;
     }
 
