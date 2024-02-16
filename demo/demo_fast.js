@@ -1710,7 +1710,7 @@ class EventHandler {
         }
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
             this.lastRender = performance.now();
-            // this.updateData();
+            this.updateData();
             // await this.updateDOM();
         } else {
             // sleep for 1/FPS seconds
