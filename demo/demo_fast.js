@@ -1,13 +1,13 @@
-// const PENDING_SIZE = 18;
-// const MEMORY_SIZE = 40;
-const PENDING_SIZE = 5;
-const MEMORY_SIZE = 10;
+const PENDING_SIZE = 18;
+const MEMORY_SIZE = 40;
+// const PENDING_SIZE = 5;
+// const MEMORY_SIZE = 10;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-let REFRESH_RATE = 60;
+let REFRESH_RATE = 30;
 
 ////////////////////////////////////////
 // Machine Learning params
@@ -17,13 +17,13 @@ const LR = 0.0001;
 const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
 // const OPTIMIZER = tf.train.adam(LR);
-const ARCHITECTURE = "mobilenetv3";
+// const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
-// const ARCHITECTURE = "linear";
+const ARCHITECTURE = "linear";
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
-const TRAIN_REPEAT_INTERVAL = 1000;
+const TRAIN_REPEAT_INTERVAL = 2000;
 
 
 
@@ -1562,19 +1562,19 @@ class EventHandler {
         // This just shifts the underlying data of the datacards
         // following the same coreography as the animation
         // but only moving the content and not the DOM elements
-        // tf.tidy(() => {
-        //     const inData = captureWebcam();
-        //     const outData = modelHandler.model.predict(inData.Tensor);
-        //     const dataEntry = new DataEntry(inData, outData, label);
+        tf.tidy(() => {
+            const inData = captureWebcam();
+            const outData = modelHandler.model.predict(inData.Tensor);
+            const dataEntry = new DataEntry(inData, outData, label);
             
-        //     // this handles all the shifting
-        //     dataHandler.addDataEntry(dataEntry);
-        // });
+            // this handles all the shifting
+            dataHandler.addDataEntry(dataEntry);
+        });
 
         // Update the data entries
-        const newestDataEntry = dataHandler.currentEntry.clone();
-        newestDataEntry.label = label;
-        dataHandler.addDataEntry(newestDataEntry);
+        // const newestDataEntry = dataHandler.currentEntry.clone();
+        // newestDataEntry.label = label;
+        // dataHandler.addDataEntry(newestDataEntry);
 
         // Update the DOM links
         for (let i = 0; i < PENDING_SIZE; i++) {
@@ -1624,7 +1624,7 @@ class EventHandler {
         }
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
             this.lastRender = performance.now();
-            dataHandler.updateCurrentEntry();
+            // dataHandler.updateCurrentEntry();
             this.addDataWithoutAnimation(this.nextLabel);
             predCardHandler.updateDOM();
         }
