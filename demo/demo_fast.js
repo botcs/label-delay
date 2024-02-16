@@ -1,7 +1,7 @@
-const PENDING_SIZE = 18;
-const MEMORY_SIZE = 40;
-// const PENDING_SIZE = 10;
-// const MEMORY_SIZE = 20;
+// const PENDING_SIZE = 18;
+// const MEMORY_SIZE = 40;
+const PENDING_SIZE = 5;
+const MEMORY_SIZE = 10;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -17,11 +17,11 @@ const LR = 0.0001;
 const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
 // const OPTIMIZER = tf.train.adam(LR);
-// const ARCHITECTURE = "mobilenetv3";
+const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
-const ARCHITECTURE = "linear";
-const IMAGE_SIZE = ARCHITECTURE.includes("cnn") ? 32 : 32;
+// const ARCHITECTURE = "linear";
+const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
 const TRAIN_REPEAT_INTERVAL = 1000;
 
@@ -86,12 +86,18 @@ class DataEntry {
         const feat = outData[1];
         this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
     }
+
+    clone() {
+        return new DataEntry(this.inData, [this.pred, this.feat], this.label);
+    }
 }
 
 class DataHandler {
     constructor(memorySize = MEMORY_SIZE, pendingSize = PENDING_SIZE) {
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
+
+        this.currentEntry = null;
 
         this.memoryEntries = [];
         this.pendingEntries = [];
@@ -104,6 +110,20 @@ class DataHandler {
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
     }
+
+    updateCurrentEntry() {
+        // Update the current entry
+        tf.tidy(() => {
+            const inData = captureWebcam();
+            const outData = modelHandler.model.predict(inData.Tensor);
+            if (this.currentEntry === null) {
+                this.currentEntry = new DataEntry(inData, outData);
+            } else {
+                this.currentEntry.updateData(inData, outData);
+            }
+        });
+    }
+    
 
     unshiftAndPop(matrix, vector, dim) {
         // Add the vector to the matrix and remove the last vector
@@ -758,7 +778,6 @@ class PredCardHandler {
         this.dataHandler = dataHandler;
         this.predCard = null;
         this.dataCard = null;
-
         this.renderPromise = null;
     }
 
@@ -790,7 +809,7 @@ class PredCardHandler {
             .attr("y", offset.y + DataCard.unitSize*1.1)
             .attr("text-anchor", "middle")
             .attr("dominant-baseline", "hanging")
-            .attr("font-size", "1.5em")
+            .attr("font-size", "1.5em");
 
         this.mainGroup.append("text")
             .text("feat")
@@ -798,7 +817,7 @@ class PredCardHandler {
             .attr("y", offset.y + DataCard.unitSize*1.1)
             .attr("text-anchor", "middle")
             .attr("dominant-baseline", "hanging")
-            .attr("font-size", "1.5em")
+            .attr("font-size", "1.5em");
 
         this.mainGroup.append("text")
             .text("pred")
@@ -806,16 +825,12 @@ class PredCardHandler {
             .attr("y", offset.y + DataCard.unitSize*1.1)
             .attr("text-anchor", "middle")
             .attr("dominant-baseline", "hanging")
-            .attr("font-size", "1.5em")
-
-            
-
+            .attr("font-size", "1.5em");
     }
 
     async updateDOM() {
         this.dataCard.dataEntry = this.dataHandler.pendingEntries[0];
         this.predCard.dataEntry = this.dataHandler.pendingEntries[0];
-
         await this.dataCard.updateDOM();
         await this.predCard.updateDOM();
     }
@@ -1274,7 +1289,7 @@ class SimilarityGridHandler {
 
     getThumbnailClientSize() {
         if (this.pendingCards.length === 0) {
-            return {width: 480, height: 480};
+            return {width: IMAGE_SIZE, height: IMAGE_SIZE};
         }
         const rect = this.pendingCards[0]
             .imageGroup
@@ -1295,54 +1310,37 @@ function frameToTensor(source) {
     let frame = tf.browser.fromPixels(source)
     
     // Resize
-    frame = frame.resizeNearestNeighbor([32, 32]);
+    // frame = frame.resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE]);
+    frame = tf.image.resizeBilinear(frame, [IMAGE_SIZE, IMAGE_SIZE]);
 
     // Add batch dimension
     frame = frame.expandDims(0);
 
     // Normalize to [-1, 1]
     frame = frame.div(tf.scalar(128)).sub(tf.scalar(1));
+
+    // Normalize to [0, 1]
+    // frame = frame.toFloat().div(tf.scalar(255));
     
     return frame;
 }
 
 
-// Start the webcam feed
-async function startWebcam() {
-    if (navigator.mediaDevices.getUserMedia) {
-        video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true })
-    }
-
-    // Add event listener to the webcam feed
-    video.addEventListener('loadeddata', () => {
-    });
-
-    // wait until the video is loaded
-    await new Promise(resolve => {
-        video.addEventListener('loadeddata', () => {
-            console.log('Video loaded');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            resolve();
-        });
-    });
-}
-
 function captureWebcam() {
     const ctx = canvas.getContext('2d');
-    
-    const outputSize = d3.max([
-        similarityGridHandler.getThumbnailClientSize().width, 
-        IMAGE_SIZE
+
+    const thumbnailSize = d3.max([
+        // similarityGridHandler.getThumbnailClientSize().width, 
+        224
     ]) * 2;
 
     // Set the canvas size to the output size
-    canvas.width = outputSize;
-    canvas.height = outputSize;
+    canvas.width = thumbnailSize;
+    canvas.height = thumbnailSize;
 
     // Calculate the coordinates to crop the video
     const videoAspectRatio = video.videoWidth / video.videoHeight;
-    const outputAspectRatio = outputSize / outputSize;
+    const outputAspectRatio = thumbnailSize / thumbnailSize;
 
     let sourceWidth, sourceHeight, sourceX, sourceY;
 
@@ -1373,13 +1371,13 @@ function captureWebcam() {
         sourceHeight, 
         0, 
         0, 
-        outputSize, 
-        outputSize
+        thumbnailSize, 
+        thumbnailSize
     );
 
-    const dataURL = canvas.toDataURL('image/png');
-    // const dataTensor = tf.tidy(() => frameToTensor(canvas));
-    const dataTensor = tf.tidy(() => frameToTensor(video));
+    const dataURL = canvas.toDataURL('image/jpeg', 0.5);
+    const dataTensor = tf.tidy(() => frameToTensor(canvas));
+    // const dataTensor = tf.tidy(() => frameToTensor(video));
 
     const frame = {
         dataURL: dataURL,
@@ -1433,46 +1431,47 @@ async function createDataCard(label = UNLABELED, url = null) {
 }
 
 
-async function updatePendingDataCard(idx) {
-    // measure the time it takes to update the pending datacard
-    const start = performance.now();
+// async function updatePendingDataCard(idx) {
+//     // measure the time it takes to update the pending datacard
+//     const start = performance.now();
     
-    if (similarityGridHandler.pendingCards.length === 0) {
-        return;
-    }
+//     if (similarityGridHandler.pendingCards.length === 0) {
+//         return;
+//     }
 
-    // if the user is using a mobile device limit the fps to 2
-    // I could use a counter, but then async headaches...
-    const skipInference = isMobile && Math.random() > 2/REFRESH_RATE;
-    // const skipInference = true;
+//     // if the user is using a mobile device limit the fps to 2
+//     // I could use a counter, but then async headaches...
+//     const skipInference = isMobile && Math.random() > 2/REFRESH_RATE;
+//     // const skipInference = true;
 
-    // Update the newest data entry
-    const dataEntry = dataHandler.pendingEntries[idx];
-    tf.tidy(() => {
-        const inData = captureWebcam();
-        if (skipInference) {
-            dataEntry.updateData(inData, null);
-            return;
-        }
-        const outData = modelHandler.model.predict(inData.Tensor);
-        dataEntry.updateData(inData, outData);
-        dataHandler.updateSimilaritiesRow(idx);
-    });
-    image_hash = await dataHandler.pendingEntries[idx].inData.Tensor.data();
-    // hash image to compare with the previous image
+//     // Update the newest data entry
+//     const dataEntry = dataHandler.pendingEntries[idx];
+//     tf.tidy(() => {
+//         const inData = captureWebcam();
+//         if (skipInference) {
+//             dataEntry.updateData(inData, null);
+//             return;
+//         }
+//         const outData = modelHandler.model.predict(inData.Tensor);
+//         dataEntry.updateData(inData, outData);
+//         dataHandler.updateSimilaritiesRow(idx);
+//     });
+//     image_hash = await dataHandler.pendingEntries[idx].inData.Tensor.data();
+//     // hash image to compare with the previous image
 
-    await similarityGridHandler.renderSimilarities();
-    await similarityGridHandler.pendingCards[idx].updateDOM();
-    const end = performance.now();
+//     await similarityGridHandler.renderSimilarities();
+//     await similarityGridHandler.pendingCards[idx].updateDOM();
+//     const end = performance.now();
 
-    // benchmark the time it takes to update the pending datacard
-    // console.log(`Updating the pending datacard took ${end-start} ms`);
-}
+//     // benchmark the time it takes to update the pending datacard
+//     // console.log(`Updating the pending datacard took ${end-start} ms`);
+// }
 
 class EventHandler {
     constructor() {
         this.renderPromise = null;
-        this.active = true;
+        this.isRendering = true;
+        this.isWebcamInitialized = false;
 
         this.nextLabel = UNLABELED;
         this.lastRender = performance.now();
@@ -1486,7 +1485,7 @@ class EventHandler {
         const architecture = d3.select("#arch-select").node().value;
 
         // Stop new data from being added
-        this.active = false;
+        this.stopRenderLoop();
 
         // Re-initialize the model
         // This is used when the architecture is changed
@@ -1500,8 +1499,7 @@ class EventHandler {
         await similarityGridHandler.renderSimilarities();
 
         // Allow new data to be added
-        this.active = true;
-        this.renderLoop();
+        this.startRenderLoop();
     }
 
     changeOptimizer() {
@@ -1564,14 +1562,19 @@ class EventHandler {
         // This just shifts the underlying data of the datacards
         // following the same coreography as the animation
         // but only moving the content and not the DOM elements
-        tf.tidy(() => {
-            const inData = captureWebcam();
-            const outData = modelHandler.model.predict(inData.Tensor);
-            const dataEntry = new DataEntry(inData, outData, label);
+        // tf.tidy(() => {
+        //     const inData = captureWebcam();
+        //     const outData = modelHandler.model.predict(inData.Tensor);
+        //     const dataEntry = new DataEntry(inData, outData, label);
             
-            // this handles all the shifting
-            dataHandler.addDataEntry(dataEntry);
-        });
+        //     // this handles all the shifting
+        //     dataHandler.addDataEntry(dataEntry);
+        // });
+
+        // Update the data entries
+        const newestDataEntry = dataHandler.currentEntry.clone();
+        newestDataEntry.label = label;
+        dataHandler.addDataEntry(newestDataEntry);
 
         // Update the DOM links
         for (let i = 0; i < PENDING_SIZE; i++) {
@@ -1616,17 +1619,50 @@ class EventHandler {
     }
 
     async renderLoop() {
-        if (!this.active) {
+        if (!this.isRendering) {
             return;
         }
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
             this.lastRender = performance.now();
+            dataHandler.updateCurrentEntry();
             this.addDataWithoutAnimation(this.nextLabel);
             predCardHandler.updateDOM();
         }
         window.requestAnimationFrame(() => {
             this.renderLoop();
         });
+    }
+
+    async initializeWebcam() {
+        if (navigator.mediaDevices.getUserMedia) {
+            video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true })
+        }
+
+        // Add event listener to the webcam feed
+        video.addEventListener('loadeddata', () => {
+        });
+
+        // wait until the video is loaded
+        await new Promise(resolve => {
+            video.addEventListener('loadeddata', () => {
+                console.log('Video loaded');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                resolve();
+            });
+        });
+
+        this.isWebcamInitialized = true;
+    }
+
+    startRenderLoop() {
+        this.isRendering = true;
+        this.renderLoop();
+    }
+
+    stopRenderLoop() {
+        this.isRendering = false;
+        // this will interrupt the render loop
     }
 
     toggleTraining() {
@@ -1655,7 +1691,11 @@ class EventHandler {
             }
 
             this.trainInterval = setInterval(async () => {
+
+                // The actual training happens here
+                // The rest is just frontend updates
                 modelHandler.trainModel();
+
                 let transition = button.style("background", `linear-gradient(90deg, #6aa84f 0%, white 0%)`);
                 for (let i = 0; i < 30; i++) {
                     const percent = Math.floor(i * 100 / 30);
@@ -1702,8 +1742,8 @@ function downloadAllImagesAsZip() {
             categoryIndices[category] = 0;
         }
 
-        const filename = `image${categoryIndices[category]}.png`;
-        // Assuming dataURL is in the format "data:image/png;base64,..."
+        const filename = `image${categoryIndices[category]}.jpg`;
+        // Assuming dataURL is in the format "data:image/jpg;base64,..."
         const imageData = dataEntry.inData.dataURL.split(',')[1];
 
         // Create a folder for the category if it doesn't exist
@@ -1784,14 +1824,13 @@ document.addEventListener('DOMContentLoaded',
         await Promise.all([
             similarityGridHandler.initialize(),
             modelHandler.initializeModel(),
-            startWebcam(),
+            eventHandler.initializeWebcam(),
         ]);
-        
-        // await createDataCard();
+
+        await createDataCard();
         await fillSlots();
         await predCardHandler.createDOM();
-    
-
+        
         eventHandler.renderLoop();
     }
 );
@@ -1799,20 +1838,19 @@ document.addEventListener('DOMContentLoaded',
 // stop the setInterval and webcam when the user switches tabs
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === "hidden") {
-        if (eventHandler.active) {
+        if (eventHandler.isRendering) {
             console.log("Stopping the render loop");
-            eventHandler.active = false;
+            eventHandler.stopRenderLoop();
+
             if (eventHandler.trainInterval !== null) {
                 console.log("Stopping the training interval");
                 eventHandler.toggleTraining();
             }
         }
     } else if (document.visibilityState === "visible") {
-        if (!eventHandler.active) {
+        if (!eventHandler.isRendering) {
             console.log("Starting the render loop");
-            // Start the interval to update the pending datacard
-            eventHandler.active = true;
-            eventHandler.renderLoop();
+            eventHandler.startRenderLoop();
         }
     }
 });

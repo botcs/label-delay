@@ -84,6 +84,14 @@ class customModelConnector {
         return this.forwardHead(backboneFeature);
     }
 
+    getWeights() {
+        return this.heads.getWeights();
+    }
+
+    setWeights(weights) {
+        this.heads.setWeights(weights);
+    }
+
 }
 
 class TFHubModelConnector {
@@ -119,12 +127,13 @@ class TFHubModelConnector {
 
         this.featureInput = tf.input({shape: [outputDim]});
 
-        // add layer norm
-        const x = tf.layers.layerNormalization().apply(this.featureInput);
+        // layer normalization
+        // const x = tf.layers.layerNormalization().apply(this.featureInput);
+        const x = this.featureInput;
 
         this.proj = tf.layers.dense({
             units: this.num_features,
-            activation: "selu",
+            // activation: "none",
         }).apply(x);
 
         this.logit = tf.layers.dense({
@@ -164,11 +173,19 @@ class TFHubModelConnector {
     
         // Crop and resize each image in the batch
         const crop = tf.image.cropAndResize(imageTensor, squareCrop, boxInd, [224, 224]);
-    
+
+        return crop;
         // Normalize pixel values
-        return crop.div(255);
+        // return crop.div(255);
     }
     
+    getWeights() {
+        return this.heads.getWeights();
+    }
+
+    setWeights(weights) {
+        this.heads.setWeights(weights);
+    }
 
     forwardBackbone(imageData) {
         imageData = this.preprocess(imageData);
@@ -236,5 +253,13 @@ class GenericModelConnector {
     predict(imageData) {
         const ret = this.model.predict(imageData);
         return ret;
+    }
+
+    getWeights() {
+        return this.model.getWeights();
+    }
+
+    setWeights(weights) {
+        this.model.setWeights(weights);
     }
 }
