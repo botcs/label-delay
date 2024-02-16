@@ -1,7 +1,7 @@
-// const PENDING_SIZE = 18;
-// const MEMORY_SIZE = 40;
-const PENDING_SIZE = 5;
-const MEMORY_SIZE = 10;
+const PENDING_SIZE = 18;
+const MEMORY_SIZE = 40;
+// const PENDING_SIZE = 5;
+// const MEMORY_SIZE = 10;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -47,6 +47,37 @@ const clip = mainSvg.append("defs")
 ////////////////////////////////////////
 // BACKEND
 ////////////////////////////////////////
+class FPSCounter {
+    constructor(warmup=5000) {
+        this.fps = 0;
+        this.frames = 0;
+        this.startTime = performance.now();
+        this.ema = -1;
+        this.warmup = warmup;
+    }
+
+    update() {
+        this.frames++;
+        const currentTime = performance.now();
+        const elapsedTime = currentTime - this.startTime;
+        if (elapsedTime > this.warmup) {
+            this.fps = this.frames / (elapsedTime / 1000);
+            this.frames = 0;
+            this.startTime = currentTime;
+            if (this.ema !== -1) {
+                this.ema = this.ema * .2 + this.fps * .8;
+            } else {
+                this.ema = this.fps;
+            }
+        }
+    }
+
+    log() {
+        console.log(`moving avg FPS: ${this.ema.toFixed(2)}`);
+    }
+}
+
+
 class DataEntry {
     static count = 0;
     constructor(inData, outData, label = UNLABELED) {
@@ -74,21 +105,25 @@ class DataEntry {
         this.feat.dispose();
     }
 
-    updateData(inData, outData=null) {
-        // Update the data of the entry
-        this.inData.dataURL = inData.dataURL;
-        if (outData === null) {
-            return;
-        }
-        this.inData.Tensor.assign(inData.Tensor);
-        const pred = tf.softmax(outData[0]);
-        this.pred.assign(tf.squeeze(pred));
-        const feat = outData[1];
-        this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
-    }
+    // updateData(inData, outData=null) {
+    //     // Update the data of the entry
+    //     this.inData.dataURL = inData.dataURL;
+    //     if (outData === null) {
+    //         return;
+    //     }
+    //     this.inData.Tensor.assign(inData.Tensor);
+    //     const pred = tf.softmax(outData[0]);
+    //     this.pred.assign(tf.squeeze(pred));
+    //     const feat = outData[1];
+    //     this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
+    // }
 
     clone() {
-        return new DataEntry(this.inData, [this.pred, this.feat], this.label);
+        return new DataEntry(
+            {dataURL: this.inData.dataURL, Tensor: this.inData.Tensor.clone()},
+            [this.pred.clone(), this.feat.clone()],
+            this.label
+        );
     }
 }
 
@@ -109,18 +144,27 @@ class DataHandler {
 
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
+
+        this.FPS = new FPSCounter();
     }
 
     updateCurrentEntry() {
+        this.FPS.update();
+        
         // Update the current entry
         tf.tidy(() => {
             const inData = captureWebcam();
             const outData = modelHandler.model.predict(inData.Tensor);
-            if (this.currentEntry === null) {
-                this.currentEntry = new DataEntry(inData, outData);
-            } else {
-                this.currentEntry.updateData(inData, outData);
+            // const outData = [tf.zeros([NUM_CLASSES]), tf.zeros([NUM_FEATURES])];
+            if (this.currentEntry !== null) {
+                this.currentEntry.dispose();
             }
+            this.currentEntry = new DataEntry(inData, outData);
+            // if (this.currentEntry === null) {
+            //     this.currentEntry = new DataEntry(inData, outData);
+            // } else {
+            //     this.currentEntry.updateData(inData, outData);
+            // }
         });
     }
     
@@ -779,6 +823,8 @@ class PredCardHandler {
         this.predCard = null;
         this.dataCard = null;
         this.renderPromise = null;
+
+        this.isInitialized = false;
     }
 
     async createDOM() {
@@ -786,15 +832,16 @@ class PredCardHandler {
 
         this.mainGroup = predSvg.append("g");
 
+        const currentDataEntry = this.dataHandler.currentEntry;
         this.dataCard = new DataCard(
-            this.dataHandler.pendingEntries[0], 
+            currentDataEntry, 
             {x: offset.x, y: offset.y},
             "horizontal"
         );
         await this.dataCard.createDOM(this.mainGroup);
         
         this.predCard = new PredCard(
-            this.dataHandler.pendingEntries[0], 
+            currentDataEntry, 
             {
                 x: this.dataCard.layout.shape.width*1.05 + offset.x,
                 y: offset.y,
@@ -826,11 +873,17 @@ class PredCardHandler {
             .attr("text-anchor", "middle")
             .attr("dominant-baseline", "hanging")
             .attr("font-size", "1.5em");
+
+        this.isInitialized = true;
     }
 
     async updateDOM() {
-        this.dataCard.dataEntry = this.dataHandler.pendingEntries[0];
-        this.predCard.dataEntry = this.dataHandler.pendingEntries[0];
+        if (!this.isInitialized) {
+            await this.createDOM();
+        }
+        const currentDataEntry = this.dataHandler.currentEntry;
+        this.dataCard.dataEntry = currentDataEntry;
+        this.predCard.dataEntry = currentDataEntry;
         await this.dataCard.updateDOM();
         await this.predCard.updateDOM();
     }
@@ -1477,7 +1530,9 @@ class EventHandler {
         this.lastRender = performance.now();
 
         this.trainInterval = null;
+        this.isStreamOn = false;
 
+        this.FPS = new FPSCounter();
     }
 
     async reinitializeModel() {
@@ -1548,21 +1603,23 @@ class EventHandler {
 
         
 
-    async addDataWithoutAnimation(label=UNLABELED) {
-        if (this.renderPromise !== null) {
-            return this.renderPromise;
-        }
-        this.renderPromise = this._addDataWithoutAnimation(label);
-        await this.renderPromise;
-        this.renderPromise = null;
-    }
+    // async addDataWithoutAnimation(label=UNLABELED) {
+    //     this.numCalls += 1;
+    //     if (this.renderPromise !== null) {
+    //         return this.renderPromise;
+    //     }
+    //     this.renderPromise = this._addDataWithoutAnimation(label);
+    //     await this.renderPromise;
+    //     this.renderPromise = null;
+    // }
 
-    async _addDataWithoutAnimation(label=UNLABELED) {
+    updateSimilarityGridData() {
         // Assumes that all the datacard slots are filled already
         // This just shifts the underlying data of the datacards
         // following the same coreography as the animation
         // but only moving the content and not the DOM elements
         // tf.tidy(() => {
+        //     this.numUpdates += 1;
         //     const inData = captureWebcam();
         //     const outData = modelHandler.model.predict(inData.Tensor);
         //     const dataEntry = new DataEntry(inData, outData, label);
@@ -1573,9 +1630,11 @@ class EventHandler {
 
         // Update the data entries
         const newestDataEntry = dataHandler.currentEntry.clone();
-        newestDataEntry.label = label;
+        newestDataEntry.label = this.nextLabel;
         dataHandler.addDataEntry(newestDataEntry);
+    }
 
+    async updateSimilarityGridDOM() {
         // Update the DOM links
         for (let i = 0; i < PENDING_SIZE; i++) {
             similarityGridHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
@@ -1583,13 +1642,40 @@ class EventHandler {
         for (let i = 0; i < MEMORY_SIZE; i++) {
             similarityGridHandler.memoryCards[i].dataEntry = dataHandler.memoryEntries[i];
         }
-
-
         
-        await Promise.all([
+        return Promise.all([
             similarityGridHandler.renderDataCards(),
             similarityGridHandler.renderSimilarities(),
         ]);
+    }
+
+    updateData() {
+        if (this.renderPromise !== null) {
+            return;
+        }
+        if (dataHandler.currentEntry === null) {
+            dataHandler.updateCurrentEntry();
+        }
+        this.updateSimilarityGridData();
+        
+    }
+
+    async updateDOM() {
+        if (this.renderPromise !== null) {
+            return;
+        }
+        this.renderPromise = this._updateDOM();
+        await this.renderPromise;
+        this.renderPromise = null;
+    }
+
+    _updateDOM() {
+        this.FPS.update();
+        const renderPromises = [predCardHandler.updateDOM()];
+        
+        if (this.isStreamOn) {
+            renderPromises.push(this.updateSimilarityGridDOM());
+        }
     }
 
     async keydown(event) {
@@ -1624,9 +1710,11 @@ class EventHandler {
         }
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
             this.lastRender = performance.now();
-            dataHandler.updateCurrentEntry();
-            this.addDataWithoutAnimation(this.nextLabel);
-            predCardHandler.updateDOM();
+            // this.updateData();
+            // await this.updateDOM();
+        } else {
+            // sleep for 1/FPS seconds
+            await new Promise(resolve => setTimeout(resolve, 1000 / REFRESH_RATE));
         }
         window.requestAnimationFrame(() => {
             this.renderLoop();
@@ -1655,7 +1743,18 @@ class EventHandler {
         this.isWebcamInitialized = true;
     }
 
+    async startStream() {
+        if (this.isStreamOn) {
+            return;
+        }
+        await fillSlots();
+        this.isStreamOn = true;
+    }
+
     startRenderLoop() {
+        if (this.isRendering) {
+            return;
+        }
         this.isRendering = true;
         this.renderLoop();
     }
@@ -1772,6 +1871,10 @@ function downloadAllImagesAsZip() {
 document.addEventListener('DOMContentLoaded', 
     async () => {
         // Connect the buttons
+
+        document.getElementById("start")
+            .addEventListener("click", () => eventHandler.startStream());
+
         for (let i = 0 ; i < 3; i++) {
             button = document.getElementById(`addCategory${i}`);
             if (isMobile) {
@@ -1819,6 +1922,7 @@ document.addEventListener('DOMContentLoaded',
             .addEventListener("change", () => eventHandler.changeSelectionPolicy());
         document.getElementById("features-select")
             .addEventListener("change", () => eventHandler.changeFeatureUpdatePolicy());
+
             
 
         await Promise.all([
@@ -1826,12 +1930,10 @@ document.addEventListener('DOMContentLoaded',
             modelHandler.initializeModel(),
             eventHandler.initializeWebcam(),
         ]);
-
-        await createDataCard();
-        await fillSlots();
-        await predCardHandler.createDOM();
-        
         eventHandler.renderLoop();
+
+        // await createDataCard();
+        
     }
 );
 
