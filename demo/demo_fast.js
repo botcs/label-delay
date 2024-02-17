@@ -17,10 +17,10 @@ const LR = 0.0001;
 const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
 // const OPTIMIZER = tf.train.adam(LR);
-// const ARCHITECTURE = "mobilenetv3";
+const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
-const ARCHITECTURE = "linear";
+// const ARCHITECTURE = "linear";
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
 const TRAIN_REPEAT_INTERVAL = 2000;
@@ -49,10 +49,9 @@ const clip = mainSvg.append("defs")
 ////////////////////////////////////////
 class FPSCounter {
     constructor(name, warmup=5000, periodicLog=5000) {
-        this.fps = 0;
         this.frames = 0;
+        this.lastFPS = -1;
         this.startTime = performance.now();
-        this.ema = -1;
         this.warmup = warmup;
 
         this.periodicLog = periodicLog;
@@ -66,24 +65,20 @@ class FPSCounter {
         const currentTime = performance.now();
         const elapsedTime = currentTime - this.startTime;
         if (elapsedTime > this.warmup) {
-            this.fps = this.frames / (elapsedTime / 1000);
-            this.frames = 0;
+            this.lastFPS = this.frames / (elapsedTime / 1000);
             this.startTime = currentTime;
-            if (this.ema !== -1) {
-                this.ema = this.ema * .2 + this.fps * .8;
-            } else {
-                this.ema = this.fps;
-            }
-
+            
             if (currentTime - this.lastLog > this.periodicLog) {
                 this.lastLog = currentTime;
                 this.log();
             }
+            
+            this.frames = 0;
         }
     }
 
     log() {
-        console.log(`${this.name} - moving avg FPS: ${this.ema.toFixed(2)}`);
+        console.log(`${this.name} - moving avg FPS: ${this.lastFPS.toFixed(2)}`);
     }
 }
 
