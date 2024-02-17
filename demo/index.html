@@ -107,10 +107,11 @@
             cursor: pointer;
             font-family: 'EB Garamond', serif;
         }
-        .control-panel button:hover {
+
+        .control-panel button:hover:enabled {
             filter: brightness(.9);
         }
-        .control-panel button:active {
+        .control-panel button:active:enabled {
             filter: brightness(.8);
         }
 
@@ -250,6 +251,14 @@
     <div class="svg-container">
         <svg id="prediction-card" style="width: 25%;" viewBox="0 0 255 150"></svg>
     </div>
+    <div class="control-panel">
+        <div style="text-align: center; width: 100%;">
+            <!-- disabled until model is not loaded-->
+            <button id="initializeWebcam" disabled>Loading Model</button>
+            <button id="startStream" disabled>Start Data Stream</button>
+        </div>  
+    </div>
+    <!-- <div class="svg-container" style="visibility: hidden;"> -->
     <div class="svg-container">
         <svg id="similarity-grid" viewBox="0 0 1600 700"></svg>
     </div>
@@ -327,10 +336,6 @@
     </div>
     
 
-    <!-- <div id="eq" style="text-align: center; vertical-align: middle">
-        
-        θ<sup id="theta-t">t</sup> = θ<sup id="theta-t-1">t-1</sup> - ∇<sub>θ<sup id="theta-t-1">t-1</sup></sub><text style="font-size: 1.6em">[</text> L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-rnd">RND</sub>), Y<sub>RND</sub>) + L(f<sub>θ<sup id="theta-t-1">t-1</sup></sub>(X<sub id="x-iwm">IWM</sub>), Y<sub>IWM</sub>)<text style="font-size: 1.6em">]</text>
-    </div> -->
     <div id="video-container" style="visibility: hidden;">
         <video id="webcam" autoplay style="display: none;"></video>
         <canvas id="aux-canvas" style="display: none;"></canvas>
