@@ -49,10 +49,9 @@ const clip = mainSvg.append("defs")
 ////////////////////////////////////////
 class FPSCounter {
     constructor(name, warmup=5000, periodicLog=5000) {
-        this.fps = 0;
         this.frames = 0;
+        this.lastFPS = -1;
         this.startTime = performance.now();
-        this.ema = -1;
         this.warmup = warmup;
 
         this.periodicLog = periodicLog;
@@ -66,24 +65,20 @@ class FPSCounter {
         const currentTime = performance.now();
         const elapsedTime = currentTime - this.startTime;
         if (elapsedTime > this.warmup) {
-            this.fps = this.frames / (elapsedTime / 1000);
-            this.frames = 0;
+            this.lastFPS = this.frames / (elapsedTime / 1000);
             this.startTime = currentTime;
-            if (this.ema !== -1) {
-                this.ema = this.ema * .2 + this.fps * .8;
-            } else {
-                this.ema = this.fps;
-            }
-
+            
             if (currentTime - this.lastLog > this.periodicLog) {
                 this.lastLog = currentTime;
                 this.log();
             }
+            
+            this.frames = 0;
         }
     }
 
     log() {
-        console.log(`${this.name} - moving avg FPS: ${this.ema.toFixed(2)}`);
+        console.log(`${this.name} - moving avg FPS: ${this.lastFPS.toFixed(2)}`);
     }
 }
 
@@ -1714,8 +1709,7 @@ class EventHandler {
         if (!this.isRendering) {
             return;
         }
-        if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
-            console.log(`num tensors: ${tf.memory().numTensors}`);
+        if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {
             this.lastRender = performance.now();
             this.updateData();
             await this.updateDOM();
