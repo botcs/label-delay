@@ -47,6 +47,47 @@ const clip = mainSvg.append("defs")
 ////////////////////////////////////////
 // BACKEND
 ////////////////////////////////////////
+class FPSCounter {
+    constructor(name, warmup=5000, periodicLog=5000) {
+        this.fps = 0;
+        this.frames = 0;
+        this.startTime = performance.now();
+        this.ema = -1;
+        this.warmup = warmup;
+
+        this.periodicLog = periodicLog;
+        this.lastLog = performance.now();
+
+        this.name = name;
+    }
+
+    update() {
+        this.frames++;
+        const currentTime = performance.now();
+        const elapsedTime = currentTime - this.startTime;
+        if (elapsedTime > this.warmup) {
+            this.fps = this.frames / (elapsedTime / 1000);
+            this.frames = 0;
+            this.startTime = currentTime;
+            if (this.ema !== -1) {
+                this.ema = this.ema * .2 + this.fps * .8;
+            } else {
+                this.ema = this.fps;
+            }
+
+            if (currentTime - this.lastLog > this.periodicLog) {
+                this.lastLog = currentTime;
+                this.log();
+            }
+        }
+    }
+
+    log() {
+        console.log(`${this.name} - moving avg FPS: ${this.ema.toFixed(2)}`);
+    }
+}
+
+
 class DataEntry {
     static count = 0;
     constructor(inData, outData, label = UNLABELED) {
@@ -109,6 +150,8 @@ class DataHandler {
 
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
+
+        this.FPS = new FPSCounter("DataHandler");
     }
 
     updateCurrentEntry() {
@@ -186,6 +229,7 @@ class DataHandler {
 
     
     async addDataEntry(dataEntry) {
+        this.FPS.update();
         this.pendingEntries.unshift(dataEntry);
 
         // Add new row to the top and remove bottom row
