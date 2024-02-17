@@ -48,12 +48,17 @@ const clip = mainSvg.append("defs")
 // BACKEND
 ////////////////////////////////////////
 class FPSCounter {
-    constructor(warmup=5000) {
+    constructor(name, warmup=5000, periodicLog=5000) {
         this.fps = 0;
         this.frames = 0;
         this.startTime = performance.now();
         this.ema = -1;
         this.warmup = warmup;
+
+        this.periodicLog = periodicLog;
+        this.lastLog = performance.now();
+
+        this.name = name;
     }
 
     update() {
@@ -69,11 +74,16 @@ class FPSCounter {
             } else {
                 this.ema = this.fps;
             }
+
+            if (currentTime - this.lastLog > this.periodicLog) {
+                this.lastLog = currentTime;
+                this.log();
+            }
         }
     }
 
     log() {
-        console.log(`moving avg FPS: ${this.ema.toFixed(2)}`);
+        console.log(`${this.name} - moving avg FPS: ${this.ema.toFixed(2)}`);
     }
 }
 
@@ -119,11 +129,11 @@ class DataEntry {
     // }
 
     clone() {
-        return new DataEntry(
+        return tf.tidy(() => new DataEntry(
             {dataURL: this.inData.dataURL, Tensor: this.inData.Tensor.clone()},
             [this.pred.clone(), this.feat.clone()],
             this.label
-        );
+        ));
     }
 }
 
@@ -145,7 +155,7 @@ class DataHandler {
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
 
-        this.FPS = new FPSCounter();
+        this.FPS = new FPSCounter("Data FPS");
     }
 
     updateCurrentEntry() {
@@ -155,16 +165,10 @@ class DataHandler {
         tf.tidy(() => {
             const inData = captureWebcam();
             const outData = modelHandler.model.predict(inData.Tensor);
-            // const outData = [tf.zeros([NUM_CLASSES]), tf.zeros([NUM_FEATURES])];
             if (this.currentEntry !== null) {
                 this.currentEntry.dispose();
             }
             this.currentEntry = new DataEntry(inData, outData);
-            // if (this.currentEntry === null) {
-            //     this.currentEntry = new DataEntry(inData, outData);
-            // } else {
-            //     this.currentEntry.updateData(inData, outData);
-            // }
         });
     }
     
@@ -229,7 +233,7 @@ class DataHandler {
     }
 
     
-    async addDataEntry(dataEntry) {
+    addDataEntry(dataEntry) { tf.tidy(() => {
         this.pendingEntries.unshift(dataEntry);
 
         // Add new row to the top and remove bottom row
@@ -271,7 +275,7 @@ class DataHandler {
 
         // Update the softmax scores
         this.scores.assign(tf.softmax(this.similarities, 1));
-    }
+    })};
 
     async updateSimilaritiesRow(rowIndex) {
         // Lazy update of the similarities
@@ -1532,7 +1536,7 @@ class EventHandler {
         this.trainInterval = null;
         this.isStreamOn = false;
 
-        this.FPS = new FPSCounter();
+        this.FPS = new FPSCounter("Rendering FPS");
     }
 
     async reinitializeModel() {
@@ -1546,12 +1550,15 @@ class EventHandler {
         // This is used when the architecture is changed
         await modelHandler.initializeModel({architecture: architecture});
 
-        // Re-compute features for all data entries
-        await dataHandler.recomputeFeatures(modelHandler.model);
+        if (this.isStreamOn) {
+            // Re-compute features for all data entries
+            dataHandler.recomputeFeatures(modelHandler.model);
+            
+            // Re-render the datacards and the similarities
+            await similarityGridHandler.renderDataCards();
+            await similarityGridHandler.renderSimilarities();
+        }
 
-        // Re-render the datacards and the similarities
-        await similarityGridHandler.renderDataCards();
-        await similarityGridHandler.renderSimilarities();
 
         // Allow new data to be added
         this.startRenderLoop();
@@ -1653,9 +1660,7 @@ class EventHandler {
         if (this.renderPromise !== null) {
             return;
         }
-        if (dataHandler.currentEntry === null) {
-            dataHandler.updateCurrentEntry();
-        }
+        dataHandler.updateCurrentEntry();
         this.updateSimilarityGridData();
         
     }
@@ -1676,6 +1681,7 @@ class EventHandler {
         if (this.isStreamOn) {
             renderPromises.push(this.updateSimilarityGridDOM());
         }
+        return Promise.all(renderPromises);
     }
 
     async keydown(event) {
@@ -1709,9 +1715,10 @@ class EventHandler {
             return;
         }
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {   
+            console.log(`num tensors: ${tf.memory().numTensors}`);
             this.lastRender = performance.now();
             this.updateData();
-            // await this.updateDOM();
+            await this.updateDOM();
         } else {
             // sleep for 1/FPS seconds
             await new Promise(resolve => setTimeout(resolve, 1000 / REFRESH_RATE));
