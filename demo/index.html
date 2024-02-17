@@ -107,10 +107,11 @@
             cursor: pointer;
             font-family: 'EB Garamond', serif;
         }
-        .control-panel button:hover {
+
+        .control-panel button:hover:enabled {
             filter: brightness(.9);
         }
-        .control-panel button:active {
+        .control-panel button:active:enabled {
             filter: brightness(.8);
         }
 
@@ -252,7 +253,9 @@
     </div>
     <div class="control-panel">
         <div style="text-align: center; width: 100%;">
-            <button id="start">Start Data Stream</button>
+            <!-- disabled until model is not loaded-->
+            <button id="initializeWebcam" disabled>Loading Model</button>
+            <button id="startStream" disabled>Start Data Stream</button>
         </div>  
     </div>
     <!-- <div class="svg-container" style="visibility: hidden;"> -->

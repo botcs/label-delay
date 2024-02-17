@@ -17,10 +17,10 @@ const LR = 0.0001;
 const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
 // const OPTIMIZER = tf.train.adam(LR);
-const ARCHITECTURE = "mobilenetv3";
+// const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
-// const ARCHITECTURE = "linear";
+const ARCHITECTURE = "linear";
 const IMAGE_SIZE = 32;
 const IMAGE_CHANNELS = 3;
 const TRAIN_REPEAT_INTERVAL = 1000;
@@ -79,13 +79,14 @@ class FPSCounter {
 
     log() {
         console.log(`${this.name} - moving avg FPS: ${this.lastFPS.toFixed(2)}`);
+        console.log(`Number of tensors: ${tf.memory().numTensors}`);
     }
 }
 
 
 class DataEntry {
     static count = 0;
-    constructor(inData, outData, label = UNLABELED) {
+    constructor(inData, outData = null, label = UNLABELED) {tf.tidy(() => {
         this.inData = inData; // An image or a video frame
 
         this.inData.Tensor = tf.variable(inData.Tensor);
@@ -102,7 +103,8 @@ class DataEntry {
 
         this.dataCard = null;
         DataEntry.count++;
-    }
+    })}
+
 
     dispose() {
         this.inData.Tensor.dispose();
@@ -149,22 +151,13 @@ class DataHandler {
 
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
-
-        this.FPS = new FPSCounter("Data FPS");
     }
 
-    updateCurrentEntry() {
-        this.FPS.update();
-        
-        // Update the current entry
-        tf.tidy(() => {
-            const inData = captureWebcam();
-            const outData = modelHandler.model.predict(inData.Tensor);
-            if (this.currentEntry !== null) {
-                this.currentEntry.dispose();
-            }
-            this.currentEntry = new DataEntry(inData, outData);
-        });
+    updateCurrentEntry(newEntry) {
+        if (this.currentEntry !== null) {
+            this.currentEntry.dispose();
+        }
+        this.currentEntry = newEntry;
     }
     
 
@@ -397,7 +390,7 @@ class ModelHandler{
         this.model.optimizer = optimizer;
     }
 
-    async trainModel() {
+    async trainModel() {tf.tidy(() => {
         // Assert that at least one memory entry is present
         if (dataHandler.memoryEntries.length === 0) {
             throw new Error("At least one labeled data entry is required");
@@ -503,7 +496,7 @@ class ModelHandler{
             similarityGridHandler.renderDataCards();
             similarityGridHandler.renderSimilarities();
         }
-    }
+    })};
 }
 const modelHandler = new ModelHandler(dataHandler);
 
@@ -824,6 +817,8 @@ class PredCardHandler {
         this.renderPromise = null;
 
         this.isInitialized = false;
+
+        this.predCardFPS = new FPSCounter("PredCard FPS");
     }
 
     async createDOM() {
@@ -877,6 +872,7 @@ class PredCardHandler {
     }
 
     async updateDOM() {
+        this.predCardFPS.update();
         if (!this.isInitialized) {
             await this.createDOM();
         }
@@ -1522,7 +1518,7 @@ async function createDataCard(label = UNLABELED, url = null) {
 class EventHandler {
     constructor() {
         this.renderPromise = null;
-        this.isRendering = true;
+        this.isRendering = false;
         this.isWebcamInitialized = false;
 
         this.nextLabel = UNLABELED;
@@ -1531,7 +1527,17 @@ class EventHandler {
         this.trainInterval = null;
         this.isStreamOn = false;
 
-        this.FPS = new FPSCounter("Rendering FPS");
+        this.similiarityGridFPS = new FPSCounter("SimilarityGrid FPS");
+    }
+
+    async initialize() {
+        // TODO: Move here all the initialization code
+        const inData = await loadImage("demo-pretrain-data/0/image1.png");
+        tf.tidy(() => {
+            const outData = modelHandler.model.predict(inData.Tensor);
+            const dataEntry = new DataEntry(inData, outData, UNLABELED);
+            this.cachedDataEntry = dataEntry;
+        });
     }
 
     async reinitializeModel() {
@@ -1637,6 +1643,7 @@ class EventHandler {
     }
 
     async updateSimilarityGridDOM() {
+        this.similiarityGridFPS.update();
         // Update the DOM links
         for (let i = 0; i < PENDING_SIZE; i++) {
             similarityGridHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
@@ -1651,13 +1658,31 @@ class EventHandler {
         ]);
     }
 
-    updateData() {
+    async updateData() {
         if (this.renderPromise !== null) {
             return;
         }
-        dataHandler.updateCurrentEntry();
-        this.updateSimilarityGridData();
-        
+
+        // let now = performance.now();
+        const dataEntry = tf.tidy(() => {
+            if (this.isWebcamInitialized) {
+                const inData = captureWebcam();
+                const outData = modelHandler.model.predict(inData.Tensor);
+                return new DataEntry(inData, outData, this.nextLabel);
+            } else {
+                const dataEntry = this.cachedDataEntry.clone();
+                dataEntry.label = this.nextLabel;
+                return dataEntry;
+            }
+        });
+        // console.log(`Input took ${performance.now() - now} ms`);
+
+        // now = performance.now();
+        tf.tidy(() => {
+            dataHandler.updateCurrentEntry(dataEntry);
+            this.updateSimilarityGridData();
+        });
+        // console.log(`Data update took ${performance.now() - now} ms`);
     }
 
     async updateDOM() {
@@ -1670,7 +1695,6 @@ class EventHandler {
     }
 
     _updateDOM() {
-        this.FPS.update();
         const renderPromises = [predCardHandler.updateDOM()];
         
         if (this.isStreamOn) {
@@ -1709,13 +1733,11 @@ class EventHandler {
         if (!this.isRendering) {
             return;
         }
+
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {
             this.lastRender = performance.now();
-            this.updateData();
-            await this.updateDOM();
-        } else {
-            // sleep for 1/FPS seconds
-            await new Promise(resolve => setTimeout(resolve, 1000 / REFRESH_RATE));
+            await this.updateData();
+            this.updateDOM();
         }
         window.requestAnimationFrame(() => {
             this.renderLoop();
@@ -1741,7 +1763,15 @@ class EventHandler {
             });
         });
 
+        document.getElementById("startStream").disabled = false;
         this.isWebcamInitialized = true;
+    }
+
+    async initializeModel() {
+        await modelHandler.initializeModel();
+        const button = document.getElementById("initializeWebcam");
+        button.disabled = false;
+        button.textContent = "Enable Webcam";
     }
 
     async startStream() {
@@ -1873,7 +1903,10 @@ document.addEventListener('DOMContentLoaded',
     async () => {
         // Connect the buttons
 
-        document.getElementById("start")
+        document.getElementById("initializeWebcam").
+            addEventListener("click", async () => eventHandler.initializeWebcam());
+
+        document.getElementById("startStream")
             .addEventListener("click", () => eventHandler.startStream());
 
         for (let i = 0 ; i < 3; i++) {
@@ -1928,13 +1961,12 @@ document.addEventListener('DOMContentLoaded',
 
         await Promise.all([
             similarityGridHandler.initialize(),
-            modelHandler.initializeModel(),
-            eventHandler.initializeWebcam(),
+            eventHandler.initializeModel(),
         ]);
-        eventHandler.renderLoop();
+        await eventHandler.initialize();
+        eventHandler.startRenderLoop();
 
-        // await createDataCard();
-        
+        // await createDataCard();        
     }
 );
 
