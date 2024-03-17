@@ -235,16 +235,23 @@
                 <div style="text-align:justify; margin-top:20px">
                     We propose a new Continual Learning setting, in which we show how does label delay impact the learning process.
                     We consider the naïve solution of ignoring the most recently collected data and only using the samples that have already received their label and compare it to the ideal case where the labels are immediately available for all samples.
-                    We provide an extensive list of experiments (amounting to over 25k GPU hours) of trying to recover the performance of the ideal case by using the samples before their corresponding labels become available.
+                    We provide an extensive list of experiments (amounting to over 25K GPU hours) of trying to recover the performance of the ideal case by using the samples before their corresponding labels become available.
 
                     <div style="margin-top:20px; width:100%; text-align: center;">
-                        <img src="fig-delay-ablation-CLOC.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;">
-                        <img src="fig-delay-ablation-CGLM.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;">
+                        <!-- Just use a join figure -->
+                        <img src="fig-delay-ablation.svg" style="width:95%; margin-top:20px; display: inline-block; vertical-align: middle;">
+                        <!-- <img src="fig-delay-ablation-CLOC.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;"> -->
+                        <!-- <img src="fig-delay-ablation-CGLM.svg" style="width:35%; margin-top:20px; display: inline-block; vertical-align: middle;"> -->
                     </div>
 
-                    We use two large-scale datasets to evaluate our approach: <b>Continual Localization (CLOC - 40M samples)</b> and <b>Continual Google Landmarks (CGLM - 0.5M samples)</b>.
+                    We use four large-scale datasets to evaluate our approach: <b>Continual Localization (CLOC - 40M samples)</b>, <b>Continual Google Landmarks (CGLM - 0.5M samples)</b>, <b>Functional Map of the World (FMoW - 118K samples)</b> and <b>Yearbook (37K samples)</b>.
                     As one can see in the above figures, there is a growing gap between the performance of the ideal case and the naïve solution as the delay increases.
                     More importantly, we show that on different datasets the impact of the delay differs significantly, which highlights the importance of modeling label delay.
+                    In the figure below, we show how the performance of the ideal case (when the labels become immediately available) and the naïve solution changes as the delay increases under different computational budgets $\mathcal{C}$:
+
+                    <div style="margin-top:20px; width:100%; text-align: center;">
+                        <img src="fig-delay-profile.svg" style="width:80%; margin-top:20px; display: inline-block; vertical-align: middle;">
+                    </div>
                 </div>
             </section>
             <section>
@@ -275,13 +282,24 @@
                         </defs>
                     </svg>
                 </div>
-                This allows us to compare the performance of various methods that extend the naïve solution to use the unlabeled samples.
-                Under such a setting, we can use the naïve solution as the lower bound and the ideal case as the upper bound, while keeping the computational cost $\mathcal{C}$ of the model the same.
-                In our work, we compare the performance of various families of methods, such as Test-Time Adaptation (TTA) and Self-Supervised Learning (SSL) and propose a new, more efficient approach fine-tailored to the problem of label delay.
+                In our proposed label delay experimental setting, we show the larger the delay the more challenging it is for Naïve, a method that relies only on older labeled data, to effectively classify new samples. 
+                This is due to a larger gap in distribution between the samples used for training and for evaluation. 
+                This begs the question of whether the new unlabeled data can be used for training to improve over Naïve, as it is much more similar to the data that the model is evaluated on.
+
+                We propose four different paradigms for utilizing the unlabeled data, namely,
+                Importance Weighted Memory Sampling (<b>IWMS</b>), Semi-Supervised Learning via Pseudo-Labeling (<b>PL</b>), Self-Supervised Semi-Supervised Learning (<b>S4L</b>) and Test-Time Adaptation (<b>TTA</b>). 
+                We integrate several methods of each family into our setting and evaluate them under various delays and computational budgets.
+                We show that our method, IWMS not only improves the performance of Naïve on three out of four datasets, but also outperforms the ideal case in two different computational budget and delay scenario:
+                
 
             <div style="margin-top:20px; width:100%; text-align: center;">
-                <img src="fig-unsupervised.svg" style="width:85%; margin-top:20px; display: inline-block; vertical-align: middle; horizontal-align: middle;">
+                <img src="fig-unsupervised.svg" style="width:95%; margin-top:20px; display: inline-block; vertical-align: middle; horizontal-align: middle;">
             </div>
+
+                To learn more about the details of our proposed method, please check out our live [<a href="./demo/">Online Learning demo</a>] which runs in the browser and uses the web-camera to model the real world data stream.
+                This demo allows you to train and interact directly with the learned representation of the model, and see how the different sampling policies affect the performance of the model.
+                
+
             </section>
 
             <section>

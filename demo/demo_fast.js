@@ -1,7 +1,9 @@
-const PENDING_SIZE = 18;
+const PENDING_SIZE = 15;
 const MEMORY_SIZE = 40;
 // const PENDING_SIZE = 5;
 // const MEMORY_SIZE = 10;
+// const PENDING_SIZE = 1;
+// const MEMORY_SIZE = 20;
 const NUM_CLASSES = 3;
 const NUM_FEATURES = 3**2;
 const UNLABELED = 42;
@@ -12,11 +14,11 @@ let REFRESH_RATE = 60;
 ////////////////////////////////////////
 // Machine Learning params
 ////////////////////////////////////////
-const LR = 0.0001;
+const LR = 0.00005;
 // const MOMENTUM = 0.3;
-const OPTIMIZER = tf.train.sgd(LR);
+// const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
-// const OPTIMIZER = tf.train.adam(LR);
+const OPTIMIZER = tf.train.adam(LR);
 // const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
