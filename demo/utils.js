@@ -49,19 +49,22 @@ class customModelConnector {
         // Warm up the model by training it once
         const warmupData = tf.randomNormal([6].concat(backboneOutputShape));
         const labels = tf.oneHot(tf.tensor1d([0,0,1,1,2,2], 'int32'), this.num_classes);
-        let logits;
-        let loss;
-        await OPTIMIZER.minimize(() => {
-            logits = this.heads.predict(warmupData)[0];
-            loss = tf.losses.softmaxCrossEntropy(labels, logits).mul(0);
-            return loss;
-        });
+        // let logits;
+        // let loss;
+        // // logits = this.heads.predict(warmupData)[0];
+        // // console.log("logits", logits);
+        
+        // // loss = tf.losses.softmaxCrossEntropy(labels, logits).mul(0);
+        // // console.log("loss", loss);
+        // return loss;
+        // await OPTIMIZER.minimize(() => {
+        // });
 
         // clean up the tensors
-        warmupData.dispose();
-        logits.dispose();
-        labels.dispose();
-        loss.dispose();
+        // warmupData.dispose();
+        // logits.dispose();
+        // labels.dispose();
+        // loss.dispose();
 
         // Summary
         console.log("Backbone:");
