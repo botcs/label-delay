@@ -112,6 +112,8 @@ class DataHandler {
         if (DataHandler.instance !== null) {
             throw new Error("DataHandler instance already exists");
         }
+        DataHandler.instance = this;
+
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
 
@@ -128,6 +130,7 @@ class DataHandler {
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
     }
+
 
     updateCurrentEntry(newEntry) {
         if (this.currentEntry !== null) {
@@ -511,7 +514,10 @@ class DataCard {
         const mainGroup = parentGroup
             .append("g");
 
-        const clip = d3.select("#clip-rounded-rect");
+        const clip = mainGroup.append("defs")
+            .append("clipPath")
+            .attr("id", "clip-rounded-rect")
+            .append("rect");
         
         mainGroup.classed("datacard", true)
             .classed("category-" + this.dataEntry.label, true)
@@ -698,7 +704,7 @@ class PredCard {
         this.renderPromise = null;
     }
 
-    async createDOM(parentGroup = null) {
+    async createDOM(parentGroup) {
         if (this.renderPromise !== null) {
             return this.renderPromise;
         }
@@ -707,10 +713,7 @@ class PredCard {
         this.renderPromise = null;
     }
 
-    async _createDOM(parentGroup = null) {
-        if (parentGroup === null) {
-            parentGroup = predSvg;
-        }
+    async _createDOM(parentGroup) {
         const mainGroup = parentGroup
             .append("g")
             .attr("transform", `translate(${this.position.x}, ${this.position.y})`);
@@ -850,32 +853,47 @@ class PredCardHandler {
 class SimilarityGridHandler {
     static instance = null;
 
-    constructor(
+    constructor({
         memorySize = MEMORY_SIZE, 
-        pendingSize = PENDING_SIZE, 
-        offset = {x:0, y:0},
-    ) {
+        pendingSize = PENDING_SIZE,
+        offset = {x: 0, y: 0}
+    } = {}) {
         if (SimilarityGridHandler.instance !== null) {
             throw new Error("SimilarityGridHandler instance already exists");
         }
+
+        if (DataHandler.instance === null) {
+            throw new Error("DataHandler instance is required for SimilarityGridHandler");
+        }
+
+        if (ModelHandler.instance === null) {
+            throw new Error("ModelHandler instance is required for SimilarityGridHandler");
+        }
+
         SimilarityGridHandler.instance = this;
-
         this.svg = d3.select("#similarity-grid");
-
-        const clip = this.svg.append("defs")
-            .append("clipPath")
-            .attr("id", "clip-rounded-rect")
-            .append("rect")
 
         // the memory entries are the labeled datacards
         // the pending entries are the unlabeled datacards
         // the width and height are used for the inner dimensions of table
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
-        this.memoryCards = [];
-        this.pendingCards = [];
         this.offset = offset;
 
+        this.X1Policy = "random";
+        this.X2Policy = "random2";
+    }
+
+    async initialize() {
+        if (dataHandler.memorySize !== this.memorySize) {
+            throw new Error("Memory size mismatch between DataHandler and SimilarityGridHandler");
+        }
+        if (dataHandler.pendingSize !== this.pendingSize) {
+            throw new Error("Pending size mismatch between DataHandler and SimilarityGridHandler");
+        }
+
+        this.memoryCards = [];
+        this.pendingCards = [];
         // width is 1x[horizontal card] + (MEM+1)x[vertical card]
         this.boardWidth = DataCard.layouts["horizontal"].shape.width;
         this.boardWidth += (this.memorySize + 1) * DataCard.layouts["vertical"].shape.width;
@@ -890,11 +908,6 @@ class SimilarityGridHandler {
         this.svg.attr("viewBox", `0 0 ${this.boardWidth} ${this.boardHeight + this.equationHeight}`);
         this.renderPromise = null;
 
-        this.X1Policy = "random";
-        this.X2Policy = "random2";
-    }
-
-    async initialize() {
         this.setDOMPositions();
         this.mainGroup = this.svg.append("g")
             .attr("id", "DOMHandler")
@@ -1167,13 +1180,13 @@ class SimilarityGridHandler {
         
         // Draw arrows from max similarity to the equation
         if (this.arrowX1 === undefined) {
-            this.arrowX1 = mainSvg.append("path")
+            this.arrowX1 = this.svg.append("path")
                 .attr("stroke", "red")
                 .attr("stroke-width", 6)
                 .attr("fill", "none");
         }
         if (this.arrowX2 === undefined) {
-            this.arrowX2 = mainSvg.append("path")
+            this.arrowX2 = this.svg.append("path")
                 .attr("stroke", "red")
                 .attr("stroke-width", 6)
                 .attr("fill", "none");
@@ -1267,8 +1280,6 @@ class SimilarityGridHandler {
         }
         await asyncMoveCall;
 
-        
-        
         this.updateMemoryPositions();
         if (this.memoryCards.length > 0) {
             this.renderSimilarities();
@@ -1345,8 +1356,9 @@ function frameToTensor(source) {
 
 
 function captureWebcam() {
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('aux-canvas');
     const ctx = canvas.getContext('2d');
-
     const thumbnailSize = 224;
 
     // Set the canvas size to the output size
@@ -1657,6 +1669,16 @@ class EventHandler {
     }
 
     async initializeWebcam() {
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('aux-canvas');
+
+        // Attempt to play video automatically
+        video.setAttribute('autoplay', 'true');
+        // Mute the video to allow autoplay without user interaction
+        video.setAttribute('muted', 'true'); 
+        // This attribute is important for autoplay in iOS
+        video.setAttribute('playsinline', 'true'); 
+
         if (navigator.mediaDevices.getUserMedia) {
             video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true })
         }
@@ -1827,15 +1849,9 @@ function initializeBackend() {
 
 async function initializeFrontend() {
     predCardHandler = new PredCardHandler();
-    similarityGridHandler = new SimilarityGridHandler(PENDING_SIZE, MEMORY_SIZE);
-
-    const video = document.getElementById('webcam');
-    // Attempt to play video automatically
-    video.setAttribute('autoplay', 'true');
-    // Mute the video to allow autoplay without user interaction
-    video.setAttribute('muted', 'true'); 
-    // This attribute is important for autoplay in iOS
-    video.setAttribute('playsinline', 'true'); 
+    similarityGridHandler = new SimilarityGridHandler(
+        {memorySize: MEMORY_SIZE, pendingSize: PENDING_SIZE}
+    );
 
     // Connect the buttons to the event handler
     document.getElementById("initializeWebcam").
