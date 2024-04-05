@@ -1,15 +1,17 @@
-// const PENDING_SIZE = 15;
-// const MEMORY_SIZE = 40;
-const PENDING_SIZE = 7;
-// const MEMORY_SIZE = 10;
-// const PENDING_SIZE = 1;
-const MEMORY_SIZE = 21;
+////////////////////////////////////////
+// CONSTANTS
+////////////////////////////////////////
+const IMAGE_SIZE = 32;
+const IMAGE_CHANNELS = 3;
 const NUM_CLASSES = 3;
-const NUM_FEATURES = 3**2;
-const UNLABELED = 42;
+const NUM_FEATURES = 3*3;
+const UNLABELED_IDX = 42;
+
+const MEMORY_SIZE = 21;
+const PENDING_SIZE = 7;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-let REFRESH_RATE = 60;
+let REFRESH_RATE = 30;
 
 ////////////////////////////////////////
 // Machine Learning params
@@ -23,28 +25,8 @@ const OPTIMIZER = tf.train.adam(LR);
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
 const ARCHITECTURE = "linear";
-const IMAGE_SIZE = 32;
-const IMAGE_CHANNELS = 3;
 const TRAIN_REPEAT_INTERVAL = 1000;
 
-
-
-const video = document.getElementById('webcam');
-
-// Attempt to play video automatically
-video.setAttribute('autoplay', 'true');
-video.setAttribute('muted', 'true'); // Mute the video to allow autoplay without user interaction
-video.setAttribute('playsinline', 'true'); // This attribute is important for autoplay in iOS
-
-const canvas = document.getElementById('aux-canvas');
-const mainSvg = d3.select("#similarity-grid");
-const predSvg = d3.select("#prediction-card");
-
-// Define the clipping path
-const clip = mainSvg.append("defs")
-    .append("clipPath")
-    .attr("id", "clip-rounded-rect")
-    .append("rect")
 
 ////////////////////////////////////////
 // BACKEND
@@ -88,7 +70,7 @@ class FPSCounter {
 
 class DataEntry {
     static count = 0;
-    constructor(inData, outData = null, label = UNLABELED) {tf.tidy(() => {
+    constructor(inData, outData = null, label = UNLABELED_IDX) {tf.tidy(() => {
         this.inData = inData; // An image or a video frame
 
         this.inData.Tensor = tf.variable(inData.Tensor);
@@ -114,19 +96,6 @@ class DataEntry {
         this.feat.dispose();
     }
 
-    // updateData(inData, outData=null) {
-    //     // Update the data of the entry
-    //     this.inData.dataURL = inData.dataURL;
-    //     if (outData === null) {
-    //         return;
-    //     }
-    //     this.inData.Tensor.assign(inData.Tensor);
-    //     const pred = tf.softmax(outData[0]);
-    //     this.pred.assign(tf.squeeze(pred));
-    //     const feat = outData[1];
-    //     this.feat.assign(tf.squeeze(feat.div(feat.norm(2))));
-    // }
-
     clone() {
         return tf.tidy(() => new DataEntry(
             {dataURL: this.inData.dataURL, Tensor: this.inData.Tensor.clone()},
@@ -137,7 +106,12 @@ class DataEntry {
 }
 
 class DataHandler {
-    constructor(memorySize = MEMORY_SIZE, pendingSize = PENDING_SIZE) {
+    static instance = null;
+
+    constructor({memorySize = MEMORY_SIZE, pendingSize = PENDING_SIZE} = {}) {
+        if (DataHandler.instance !== null) {
+            throw new Error("DataHandler instance already exists");
+        }
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
 
@@ -240,7 +214,7 @@ class DataHandler {
             const transitionEntry = this.pendingEntries.pop();
             
             // If labeled, add to the memory entries
-            if (transitionEntry.label !== UNLABELED) {
+            if (transitionEntry.label !== UNLABELED_IDX) {
                 this.memoryEntries.unshift(transitionEntry);
 
                 // Add new column to the left and remove right column
@@ -333,16 +307,17 @@ class DataHandler {
         this.updateSimilarities();
     }
 }
-const dataHandler = new DataHandler();
-
-
 
 class ModelHandler{
-    constructor(dataHandler) {
+    static instance = null;
+
+    constructor() {
+        if (ModelHandler.instance !== null) {
+            throw new Error("ModelHandler instance already exists");
+        }
+        ModelHandler.instance = this;
         this.model = null;
-        this.dataHandler = dataHandler;
         this.seed = 42;
-        this.prevLabel = null;
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
         this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
 
@@ -401,27 +376,6 @@ class ModelHandler{
         // Train the model
         const optimizer = this.model.optimizer;
         const lossFunction = tf.losses.softmaxCrossEntropy;
-        
-        // const indices = [];
-        // // find memory samples that are not the same as the previous label
-        // const availableIndices = [];
-        // for (let i = 0; i < dataHandler.memoryEntries.length; i++) {
-        //     if (this.prevLabel !== dataHandler.memoryEntries[i].label) {
-        //         availableIndices.push(i);
-        //     }
-        // }
-        
-        // let randomIdx;
-        // if (availableIndices.length === 0) {
-        //     randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-        // } else {
-        //     randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-        // }
-        
-        // this.prevLabel = dataHandler.memoryEntries[randomIdx].label;
-        // console.log(`randomIdx: ${randomIdx}, prevLabel: ${this.prevLabel}`);
-        // this.randomIdx = randomIdx;
-        // indices.push(randomIdx);
 
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
         this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
@@ -500,7 +454,6 @@ class ModelHandler{
         }
     })};
 }
-const modelHandler = new ModelHandler(dataHandler);
 
 ////////////////////////////////////////
 // FRONTEND
@@ -545,7 +498,7 @@ class DataCard {
         this.renderPromise = null;
     }
 
-    async createDOM(parentGroup = null) {
+    async createDOM(parentGroup) {
         if (this.renderPromise !== null) {
             return this.renderPromise;
         }
@@ -554,12 +507,11 @@ class DataCard {
         this.renderPromise = null;
     }
 
-    async _createDOM(parentGroup = null) {
-        if (parentGroup === null) {
-            parentGroup = mainSvg;
-        }
+    async _createDOM(parentGroup) {
         const mainGroup = parentGroup
             .append("g");
+
+        const clip = d3.select("#clip-rounded-rect");
         
         mainGroup.classed("datacard", true)
             .classed("category-" + this.dataEntry.label, true)
@@ -812,8 +764,14 @@ class PredCard {
 }
 
 class PredCardHandler {
-    constructor(dataHandler) {
-        this.dataHandler = dataHandler;
+    static instance = null;
+
+    constructor() {
+        if (PredCardHandler.instance !== null) {
+            throw new Error("PredCardHandler instance already exists");
+        }
+        PredCardHandler.instance = this;
+        
         this.predCard = null;
         this.dataCard = null;
         this.renderPromise = null;
@@ -825,10 +783,11 @@ class PredCardHandler {
 
     async createDOM() {
         const offset = {x: 5, y: 5};
+        const predSVG = d3.select("#prediction-card");
 
-        this.mainGroup = predSvg.append("g");
+        this.mainGroup = predSVG.append("g");
 
-        const currentDataEntry = this.dataHandler.currentEntry;
+        const currentDataEntry = dataHandler.currentEntry;
         this.dataCard = new DataCard(
             currentDataEntry, 
             {x: offset.x, y: offset.y},
@@ -878,28 +837,39 @@ class PredCardHandler {
         if (!this.isInitialized) {
             await this.createDOM();
         }
-        const currentDataEntry = this.dataHandler.currentEntry;
+        const currentDataEntry = dataHandler.currentEntry;
         this.dataCard.dataEntry = currentDataEntry;
         this.predCard.dataEntry = currentDataEntry;
         await this.dataCard.updateDOM();
         await this.predCard.updateDOM();
     }
 }
-const predCardHandler = new PredCardHandler(dataHandler);
+// const predCardHandler = new PredCardHandler(dataHandler);
 
 
 class SimilarityGridHandler {
+    static instance = null;
+
     constructor(
         memorySize = MEMORY_SIZE, 
         pendingSize = PENDING_SIZE, 
         offset = {x:0, y:0},
-        // boardWidth = 1600, 
-        // boardHeight = 500
     ) {
+        if (SimilarityGridHandler.instance !== null) {
+            throw new Error("SimilarityGridHandler instance already exists");
+        }
+        SimilarityGridHandler.instance = this;
+
+        this.svg = d3.select("#similarity-grid");
+
+        const clip = this.svg.append("defs")
+            .append("clipPath")
+            .attr("id", "clip-rounded-rect")
+            .append("rect")
+
         // the memory entries are the labeled datacards
         // the pending entries are the unlabeled datacards
         // the width and height are used for the inner dimensions of table
-
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
         this.memoryCards = [];
@@ -917,7 +887,7 @@ class SimilarityGridHandler {
         this.equationHeight = DataCard.unitSize*2;
 
         // set the viewbox of the svg
-        mainSvg.attr("viewBox", `0 0 ${this.boardWidth} ${this.boardHeight + this.equationHeight}`);
+        this.svg.attr("viewBox", `0 0 ${this.boardWidth} ${this.boardHeight + this.equationHeight}`);
         this.renderPromise = null;
 
         this.X1Policy = "random";
@@ -926,7 +896,7 @@ class SimilarityGridHandler {
 
     async initialize() {
         this.setDOMPositions();
-        this.mainGroup = mainSvg.append("g")
+        this.mainGroup = this.svg.append("g")
             .attr("id", "DOMHandler")
             .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
         
@@ -1192,8 +1162,6 @@ class SimilarityGridHandler {
             .attr("height", (d, i) => barHeightScale(d, i)) // Updated height attribute
             .attr("fill", (d, i) => color(d, i))
             .style("opacity", (d, i) => barOpacity(d, i))
-            // .style("stroke", "#797979")
-            // .style("stroke-width", "2px")
             .attr("rx", 10)
             .attr("ry", 10);
         
@@ -1281,7 +1249,7 @@ class SimilarityGridHandler {
             
         if (transitionCard !== null) {
             // if labeled, add to the memory entries
-            if (transitionCard.dataEntry.label !== UNLABELED) {
+            if (transitionCard.dataEntry.label !== UNLABELED_IDX) {
                 this.memoryCards.unshift(transitionCard);
                 await Promise.all([
                     transitionCard.changePosition(this.transitionPosition),
@@ -1352,7 +1320,7 @@ class SimilarityGridHandler {
         };
     }
 }
-const similarityGridHandler = new SimilarityGridHandler();
+// const similarityGridHandler = new SimilarityGridHandler();
 
 
 function frameToTensor(source) {
@@ -1379,10 +1347,7 @@ function frameToTensor(source) {
 function captureWebcam() {
     const ctx = canvas.getContext('2d');
 
-    const thumbnailSize = d3.max([
-        // similarityGridHandler.getThumbnailClientSize().width, 
-        224
-    ]) * 2;
+    const thumbnailSize = 224;
 
     // Set the canvas size to the output size
     canvas.width = thumbnailSize;
@@ -1455,7 +1420,7 @@ async function loadImage(url) {
     return frame;
 }
 
-async function createDataCard(label = UNLABELED, url = null) {
+async function createDataCard(label = UNLABELED_IDX, url = null) {
     if (similarityGridHandler.renderPromise !== null) {
         await similarityGridHandler.renderPromise;
         
@@ -1481,49 +1446,20 @@ async function createDataCard(label = UNLABELED, url = null) {
 }
 
 
-// async function updatePendingDataCard(idx) {
-//     // measure the time it takes to update the pending datacard
-//     const start = performance.now();
-    
-//     if (similarityGridHandler.pendingCards.length === 0) {
-//         return;
-//     }
-
-//     // if the user is using a mobile device limit the fps to 2
-//     // I could use a counter, but then async headaches...
-//     const skipInference = isMobile && Math.random() > 2/REFRESH_RATE;
-//     // const skipInference = true;
-
-//     // Update the newest data entry
-//     const dataEntry = dataHandler.pendingEntries[idx];
-//     tf.tidy(() => {
-//         const inData = captureWebcam();
-//         if (skipInference) {
-//             dataEntry.updateData(inData, null);
-//             return;
-//         }
-//         const outData = modelHandler.model.predict(inData.Tensor);
-//         dataEntry.updateData(inData, outData);
-//         dataHandler.updateSimilaritiesRow(idx);
-//     });
-//     image_hash = await dataHandler.pendingEntries[idx].inData.Tensor.data();
-//     // hash image to compare with the previous image
-
-//     await similarityGridHandler.renderSimilarities();
-//     await similarityGridHandler.pendingCards[idx].updateDOM();
-//     const end = performance.now();
-
-//     // benchmark the time it takes to update the pending datacard
-//     // console.log(`Updating the pending datacard took ${end-start} ms`);
-// }
-
 class EventHandler {
+    static instance = null;
+
     constructor() {
+        if (EventHandler.instance !== null) {
+            throw new Error("EventHandler instance already exists");
+        }
+        EventHandler.instance = this;
+
         this.renderPromise = null;
         this.isRendering = false;
         this.isWebcamInitialized = false;
 
-        this.nextLabel = UNLABELED;
+        this.nextLabel = UNLABELED_IDX;
         this.lastRender = performance.now();
 
         this.trainInterval = null;
@@ -1537,7 +1473,7 @@ class EventHandler {
         const inData = await loadImage("demo-pretrain-data/0/image1.png");
         tf.tidy(() => {
             const outData = modelHandler.model.predict(inData.Tensor);
-            const dataEntry = new DataEntry(inData, outData, UNLABELED);
+            const dataEntry = new DataEntry(inData, outData, UNLABELED_IDX);
             this.cachedDataEntry = dataEntry;
         });
     }
@@ -1611,34 +1547,12 @@ class EventHandler {
         modelHandler.updateFeatures = policy === true;
     }
 
-        
-
-    // async addDataWithoutAnimation(label=UNLABELED) {
-    //     this.numCalls += 1;
-    //     if (this.renderPromise !== null) {
-    //         return this.renderPromise;
-    //     }
-    //     this.renderPromise = this._addDataWithoutAnimation(label);
-    //     await this.renderPromise;
-    //     this.renderPromise = null;
-    // }
-
     updateSimilarityGridData() {
         // Assumes that all the datacard slots are filled already
         // This just shifts the underlying data of the datacards
         // following the same coreography as the animation
         // but only moving the content and not the DOM elements
-        // tf.tidy(() => {
-        //     this.numUpdates += 1;
-        //     const inData = captureWebcam();
-        //     const outData = modelHandler.model.predict(inData.Tensor);
-        //     const dataEntry = new DataEntry(inData, outData, label);
-            
-        //     // this handles all the shifting
-        //     dataHandler.addDataEntry(dataEntry);
-        // });
 
-        // Update the data entries
         const newestDataEntry = dataHandler.currentEntry.clone();
         newestDataEntry.label = this.nextLabel;
         dataHandler.addDataEntry(newestDataEntry);
@@ -1665,7 +1579,6 @@ class EventHandler {
             return;
         }
 
-        // let now = performance.now();
         const dataEntry = tf.tidy(() => {
             if (this.isWebcamInitialized) {
                 const inData = captureWebcam();
@@ -1677,14 +1590,11 @@ class EventHandler {
                 return dataEntry;
             }
         });
-        // console.log(`Input took ${performance.now() - now} ms`);
 
-        // now = performance.now();
         tf.tidy(() => {
             dataHandler.updateCurrentEntry(dataEntry);
             this.updateSimilarityGridData();
         });
-        // console.log(`Data update took ${performance.now() - now} ms`);
     }
 
     async updateDOM() {
@@ -1721,14 +1631,14 @@ class EventHandler {
                 this.toggleTraining();
                 return;
             default:
-                label = UNLABELED;
+                label = UNLABELED_IDX;
                 break;
         }
         this.nextLabel = label;
     }
 
     async keyup(event) {
-        this.nextLabel = UNLABELED;
+        this.nextLabel = UNLABELED_IDX;
     }
 
     async renderLoop() {
@@ -1770,7 +1680,7 @@ class EventHandler {
     }
 
     async initializeModel() {
-        await modelHandler.initializeModel();
+        await modelHandler.initializeModel({architecture: ARCHITECTURE, optimizer: OPTIMIZER});
         const button = document.getElementById("initializeWebcam");
         button.disabled = false;
         button.textContent = "Enable Webcam";
@@ -1900,77 +1810,100 @@ function downloadAllImagesAsZip() {
     });
 }
 
-// Initialize the webcam on page load
-document.addEventListener('DOMContentLoaded', 
-    async () => {
-        // Connect the buttons
 
-        document.getElementById("initializeWebcam").
-            addEventListener("click", async () => eventHandler.initializeWebcam());
+// Singleton elements
+let dataHandler;
+let modelHandler;
+let similarityGridHandler;
+let predCardHandler;
 
-        document.getElementById("startStream")
-            .addEventListener("click", () => eventHandler.startStream());
 
-        for (let i = 0 ; i < 3; i++) {
-            button = document.getElementById(`addCategory${i}`);
-            if (isMobile) {
-                // on mobile the touchstart and touchend events are used
-                button.addEventListener("touchstart", () => {
-                    eventHandler.nextLabel = i.toString();
-                });
-                button.addEventListener("touchend", () => {
-                    eventHandler.nextLabel = UNLABELED;
-                });
-            } else {
-                // on holding the button, the label is set to i
-                button.addEventListener("mousedown", () => {
-                    eventHandler.nextLabel = i.toString();
-                });
-                button.addEventListener("mouseup", () => {
-                    eventHandler.nextLabel = UNLABELED;
-                });
-            }
+function initializeBackend() {
+    // Initialize dataHandler
+    dataHandler = new DataHandler({memorySize: MEMORY_SIZE, pendingSize: PENDING_SIZE});
+    modelHandler = new ModelHandler();  
+}
 
+
+async function initializeFrontend() {
+    predCardHandler = new PredCardHandler();
+    similarityGridHandler = new SimilarityGridHandler(PENDING_SIZE, MEMORY_SIZE);
+
+    const video = document.getElementById('webcam');
+    // Attempt to play video automatically
+    video.setAttribute('autoplay', 'true');
+    // Mute the video to allow autoplay without user interaction
+    video.setAttribute('muted', 'true'); 
+    // This attribute is important for autoplay in iOS
+    video.setAttribute('playsinline', 'true'); 
+
+    // Connect the buttons to the event handler
+    document.getElementById("initializeWebcam").
+        addEventListener("click", async () => eventHandler.initializeWebcam());
+
+    document.getElementById("startStream")
+        .addEventListener("click", () => eventHandler.startStream());
+
+    for (let i = 0 ; i < 3; i++) {
+        button = document.getElementById(`addCategory${i}`);
+        if (isMobile) {
+            // on mobile the touchstart and touchend events are used
+            button.addEventListener("touchstart", () => {
+                eventHandler.nextLabel = i.toString();
+            });
+            button.addEventListener("touchend", () => {
+                eventHandler.nextLabel = UNLABELED_IDX;
+            });
+        } else {
+            // on holding the button, the label is set to i
+            button.addEventListener("mousedown", () => {
+                eventHandler.nextLabel = i.toString();
+            });
+            button.addEventListener("mouseup", () => {
+                eventHandler.nextLabel = UNLABELED_IDX;
+            });
         }
-
-        // Connect the slider
-        const slider = document.getElementById("fpsSlider");
-        slider.addEventListener("input", () => {
-            REFRESH_RATE = parseInt(slider.value);
-        });
-
-
-        document.getElementById("trainModel")
-            .addEventListener("click", () => eventHandler.toggleTraining());
-        document.getElementById("saveImages")
-            .addEventListener("click", downloadAllImagesAsZip);
-
-
-        document.getElementById("arch-select")
-            .addEventListener("change", () => eventHandler.reinitializeModel());
-        document.getElementById("optimizer-select")
-            .addEventListener("change", () => eventHandler.changeOptimizer());
-        document.getElementById("learning-rate-select")
-            .addEventListener("change", () => eventHandler.changeOptimizer());
-        document.getElementById("x1-policy-select")
-            .addEventListener("change", () => eventHandler.changeSelectionPolicy());
-        document.getElementById("x2-policy-select")
-            .addEventListener("change", () => eventHandler.changeSelectionPolicy());
-        document.getElementById("features-select")
-            .addEventListener("change", () => eventHandler.changeFeatureUpdatePolicy());
-
-            
-
-        await Promise.all([
-            similarityGridHandler.initialize(),
-            eventHandler.initializeModel(),
-        ]);
-        await eventHandler.initialize();
-        eventHandler.startRenderLoop();
-
-        // await createDataCard();        
     }
-);
+
+    // Connect the UI to the event handlers
+    const slider = document.getElementById("fpsSlider");
+    slider.addEventListener("input", () => {
+        REFRESH_RATE = parseInt(slider.value);
+    });
+
+    document.getElementById("trainModel")
+        .addEventListener("click", () => eventHandler.toggleTraining());
+    document.getElementById("saveImages")
+        .addEventListener("click", downloadAllImagesAsZip);
+
+
+    document.getElementById("arch-select")
+        .addEventListener("change", () => eventHandler.reinitializeModel());
+    document.getElementById("optimizer-select")
+        .addEventListener("change", () => eventHandler.changeOptimizer());
+    document.getElementById("learning-rate-select")
+        .addEventListener("change", () => eventHandler.changeOptimizer());
+    document.getElementById("x1-policy-select")
+        .addEventListener("change", () => eventHandler.changeSelectionPolicy());
+    document.getElementById("x2-policy-select")
+        .addEventListener("change", () => eventHandler.changeSelectionPolicy());
+    document.getElementById("features-select")
+        .addEventListener("change", () => eventHandler.changeFeatureUpdatePolicy());
+
+    await Promise.all([
+        similarityGridHandler.initialize(),
+        eventHandler.initializeModel(),
+    ]);
+    await eventHandler.initialize();
+    eventHandler.startRenderLoop();
+}
+
+
+// Initialize the application on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initializeBackend();
+    initializeFrontend();
+});
 
 // stop the setInterval and webcam when the user switches tabs
 document.addEventListener('visibilitychange', async () => {
