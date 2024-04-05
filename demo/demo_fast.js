@@ -1637,17 +1637,20 @@ class EventHandler {
         await dataHandler.updateMemoryAndPendingSize({memorySize: newSize});
         modelHandler.updateRandomIdxs();
         await similarityGridHandler.updateMemorySize(newSize);
-
+        
         if (this.isStreamOn) {
+            await new Promise(resolve => setTimeout(resolve, 500));
             // if the memory is not full, add card
-            for (let i = dataHandler.memoryEntries.length; i < newSize; i++) {
-                // TODO: Wait for the user to add labels instead of auto-adding
-                // Reason for not implementing now is to avoid confusion on UI
-                await createDataCard(0);
-            }
-            // flush it out with unlabeled cards
-            for (let i = 0; i < this.pendingSize; i++) {
-                await createDataCard(UNLABELED_IDX);
+            if (dataHandler.memoryEntries.length < newSize) {
+                for (let i = dataHandler.memoryEntries.length; i < newSize; i++) {
+                    // TODO: Wait for the user to add labels instead of auto-adding
+                    // Reason for not implementing now is to avoid confusion on UI
+                    await createDataCard(0);
+                }
+                // flush it out with unlabeled cards
+                for (let i = 0; i < this.pendingSize; i++) {
+                    await createDataCard(UNLABELED_IDX);
+                }
             }
 
             // Update the similarity grid
@@ -1675,8 +1678,11 @@ class EventHandler {
         
         if (this.isStreamOn) {
             // if the pending is not full, add card
-            for (let i = dataHandler.pendingEntries.length; i < newSize; i++) {
-                await createDataCard(UNLABELED_IDX);
+            if (dataHandler.pendingEntries.length < newSize) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                for (let i = dataHandler.pendingEntries.length; i < newSize; i++) {
+                    await createDataCard(UNLABELED_IDX);
+                }
             }
 
             // Update the similarity grid
@@ -1951,9 +1957,10 @@ const eventHandler = new EventHandler();
 
 
 async function fillSlots(useWebcam=true) {
+    const numSlots = eventHandler.pendingSize + eventHandler.memorySize;
     if (useWebcam) {
         // Fill the pending slots with webcam images
-        for (let i = 0; i < PENDING_SIZE+MEMORY_SIZE; i++) {
+        for (let i = 0; i < numSlots; i++) {
             await createDataCard(0);
         }
         modelHandler.randomIdx = Math.floor(Math.random() * dataHandler.memorySize);
@@ -1961,8 +1968,7 @@ async function fillSlots(useWebcam=true) {
     } else {
         // Randomly select images from the dataset to fill all slot
         const data = [];
-        const numData = PENDING_SIZE + MEMORY_SIZE;
-        for (let i = 0; i < numData; i++) {
+        for (let i = 0; i < numSlots; i++) {
             const label = Math.floor(Math.random() * 2);
             const url = `demo-pretrain-data/${label}/image${i%5}.png`;
             await createDataCard(label, url);
