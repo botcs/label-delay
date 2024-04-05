@@ -7,7 +7,7 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3*3;
 const UNLABELED_IDX = 42;
 
-const MEMORY_SIZE = 21;
+const MEMORY_SIZE = 10;
 const PENDING_SIZE = 7;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -126,9 +126,42 @@ class DataHandler {
         // Use this to store the cosine similarities
         this.similarities = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
 
-
         // Use this to store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
+    }
+
+    updateMemoryAndPendingSize({
+        memorySize = this.memorySize,
+        pendingSize = this.pendingSize
+    }) {
+        if (memorySize === this.memorySize && pendingSize === this.pendingSize) {
+            return;
+        }
+        console.log('updating memory and pending size:', memorySize, pendingSize);
+
+        this.memorySize = memorySize;
+        this.pendingSize = pendingSize;
+
+        // If the memory size is reduced, remove the oldest entries
+        while (this.memoryEntries.length > memorySize) {
+            const oldestEntry = this.memoryEntries.pop();
+            oldestEntry.dispose();
+        }
+        
+        // If the pending size is reduced, remove the oldest entries
+        while (this.pendingEntries.length > pendingSize) {
+            console.log('removing pending entry, size:', this.pendingEntries.length);
+            const oldestEntry = this.pendingEntries.pop();
+            oldestEntry.dispose();
+        }
+        
+        // Reinitialize the similarities and scores variables
+        this.similarities.dispose();
+        this.similarities = tf.variable(tf.zeros([pendingSize, memorySize]));
+        
+        this.scores.dispose();
+        this.scores = tf.variable(tf.zeros([pendingSize, memorySize]));
+
     }
 
 
@@ -329,7 +362,6 @@ class ModelHandler{
         this.updateFeatures = true;
     }
     
-
     async initializeModel({
         architecture = ARCHITECTURE,
         image_size = IMAGE_SIZE,
@@ -359,6 +391,9 @@ class ModelHandler{
         await this.model.loadModel();
         this.numIterations = 0;
 
+        this.accuracies = [];
+        this.losses = [];
+
         similarityGridHandler.THETA_T.text(this.numIterations)
             .append("tspan")
             .attr("dy", "0.5em")
@@ -366,9 +401,15 @@ class ModelHandler{
 
     }
 
-    async changeOptimizer(optimizer) {
+    changeOptimizer(optimizer) {
         this.model.optimizer = optimizer;
     }
+
+    updateRandomIdxs() {
+        this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+        this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
+    }
+
 
     async trainModel() {tf.tidy(() => {
         // Assert that at least one memory entry is present
@@ -424,6 +465,7 @@ class ModelHandler{
                 const logits = this.model.forwardHead(features)[0];
                 const loss = lossFunction(data.labels, logits);
                 console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                losses.push(loss.dataSync());
                 return loss;
             });
         } else {
@@ -432,6 +474,7 @@ class ModelHandler{
                 const logits = this.model.forwardHead(features)[0];
                 const loss = lossFunction(data.labels, logits);
                 console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                losses.push(loss.dataSync());
                 return loss;
             });
         }
@@ -605,6 +648,11 @@ class DataCard {
         this.renderPromise = null;
     }
     async _updateDOM() {
+        // update position
+        this.mainGroup.attr(
+            "transform", `translate(${this.position.x}, ${this.position.y})`
+        );
+
         // Update label
         // remove previous label
         this.mainGroup.attr("class", "datacard category-" + this.dataEntry.label);
@@ -871,7 +919,6 @@ class SimilarityGridHandler {
         }
 
         SimilarityGridHandler.instance = this;
-        this.svg = d3.select("#similarity-grid");
 
         // the memory entries are the labeled datacards
         // the pending entries are the unlabeled datacards
@@ -882,6 +929,10 @@ class SimilarityGridHandler {
 
         this.X1Policy = "random";
         this.X2Policy = "random2";
+
+        this.memoryCards = [];
+        this.pendingCards = [];
+        this.mainDOMgroup = null;
     }
 
     async initialize() {
@@ -891,9 +942,9 @@ class SimilarityGridHandler {
         if (dataHandler.pendingSize !== this.pendingSize) {
             throw new Error("Pending size mismatch between DataHandler and SimilarityGridHandler");
         }
-
-        this.memoryCards = [];
-        this.pendingCards = [];
+        
+        this.svg = d3.select("#similarity-grid");
+        
         // width is 1x[horizontal card] + (MEM+1)x[vertical card]
         this.boardWidth = DataCard.layouts["horizontal"].shape.width;
         this.boardWidth += (this.memorySize + 1) * DataCard.layouts["vertical"].shape.width;
@@ -904,18 +955,21 @@ class SimilarityGridHandler {
 
         this.equationHeight = DataCard.unitSize*2;
 
-        // set the viewbox of the svg
+        // set the viewbox of the SVG
         this.svg.attr("viewBox", `0 0 ${this.boardWidth} ${this.boardHeight + this.equationHeight}`);
         this.renderPromise = null;
 
         this.setDOMPositions();
-        this.mainGroup = this.svg.append("g")
-            .attr("id", "DOMHandler")
-            .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
+        if (this.mainDOMGroup == null) {
+            this.mainDOMGroup = this.svg.append("g")
+                .attr("id", "mainDOMGroup")
+                .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
+        }
         
         // draw the grid
-        const grid = this.mainGroup.append("g")
-        grid.append("g")
+        this.grid = this.mainDOMGroup.append("g")
+            .attr("id", "grid");
+        this.grid.append("g")
             .attr("id", "horGrid")
             .selectAll("line")
             .data(this.gridX.domain())
@@ -928,7 +982,7 @@ class SimilarityGridHandler {
             .attr("stroke-width", 1)
             .attr("stroke-dasharray", "5,5");
 
-        grid.append("g")
+        this.grid.append("g")
             .attr("id", "verGrid")
             .selectAll("line")
             .data(this.gridY.domain())
@@ -942,7 +996,7 @@ class SimilarityGridHandler {
             .attr("stroke-dasharray", "5,5");
 
 
-        this.legendGroup = this.mainGroup.append("g")
+        this.legendGroup = this.mainDOMGroup.append("g")
             .attr("id", "legendGroup");
 
         this.legendGroup.append("text")
@@ -966,10 +1020,15 @@ class SimilarityGridHandler {
 
         
 
-        this.similarityGroup = this.mainGroup.append("g")
+        // Add group for the similarity matrix
+        this.similarityGroup = this.mainDOMGroup.append("g")
             .attr("id", "similarityGroup");
 
-        this.THETA_T = this.mainGroup.append("text")
+        // Add group for the equation
+        this.equationGroup = this.mainDOMGroup.append("g")
+            .attr("id", "equationGroup");
+
+        this.THETA_T = this.equationGroup.append("text")
             .attr("id", "THETA")
             .style("font-size", "3em")
             .style("text-anchor", "middle")
@@ -984,7 +1043,7 @@ class SimilarityGridHandler {
             .attr("dy", "0.5em")
             .text("=train(");
 
-        this.X_1 = this.mainGroup.append("text")
+        this.X_1 = this.equationGroup.append("text")
             .attr("id", "X_RND")
             .style("font-size", "3em")
             .style("text-anchor", "middle")
@@ -998,7 +1057,7 @@ class SimilarityGridHandler {
             .append("tspan")
             .attr("dy", "-0.5em")
             .text(",");
-        this.X_2 = this.mainGroup.append("text")
+        this.X_2 = this.equationGroup.append("text")
             .attr("id", "X_IWM")
             .style("font-size", "3em")
             .style("text-anchor", "middle")
@@ -1237,6 +1296,54 @@ class SimilarityGridHandler {
 
     }
 
+    async updateMemorySize(newSize) {
+        if (newSize === this.memorySize) {
+            return;
+        }
+        this.memorySize = newSize;
+
+        // remove the oldest memory entries
+        while (this.memoryCards.length > this.memorySize) {
+            const oldestMemoryCard = this.memoryCards.pop();
+            await oldestMemoryCard.removeDOM();
+        }
+
+        this.grid.remove();
+        this.equationGroup.remove();
+        this.similarityGroup.remove();
+        this.legendGroup.remove();
+        this.initialize();
+
+        // update the positions of the memory entries
+        await this.updateMemoryPositions();
+
+        await this.renderSimilarities();
+    }
+
+    async updatePendingSize(newSize) {
+        if (newSize === this.pendingSize) {
+            return;
+        }
+        this.pendingSize = newSize;
+
+        // remove the oldest pending entries
+        while (this.pendingCards.length > this.pendingSize) {
+            const oldestPendingCard = this.pendingCards.pop();
+            await oldestPendingCard.removeDOM();
+        }
+
+        this.grid.remove();
+        this.equationGroup.remove();
+        this.similarityGroup.remove();
+        this.legendGroup.remove();
+        this.initialize();
+
+        // update the positions of the pending entries
+        await this.updatePendingPositions();
+        await this.updateMemoryPositions();
+        await this.renderSimilarities();
+    }
+
     async addDataCard(dataEntry) {
         if (this.renderPromise !== null) {
             return this.renderPromise;
@@ -1249,7 +1356,7 @@ class SimilarityGridHandler {
     async _addDataCard(dataEntry) {
         // Add card to the pending entries
         const dataCard = new DataCard(dataEntry);
-        await dataCard.createDOM(this.mainGroup);
+        await dataCard.createDOM(this.mainDOMGroup);
 
         this.pendingCards.unshift(dataCard);
         
@@ -1281,7 +1388,7 @@ class SimilarityGridHandler {
         await asyncMoveCall;
 
         this.updateMemoryPositions();
-        if (this.memoryCards.length > 0) {
+        if (this.memoryCards.length > 0 && this.pendingCards.length == this.pendingSize) {
             this.renderSimilarities();
         }
 
@@ -1435,14 +1542,13 @@ async function loadImage(url) {
 async function createDataCard(label = UNLABELED_IDX, url = null) {
     if (similarityGridHandler.renderPromise !== null) {
         await similarityGridHandler.renderPromise;
-        
+    
     }
     let inData;
     if (url !== null) {
         inData = await loadImage(url);
     }
 
-    // outData = model.predict(inData);
     const dataEntry = tf.tidy(() => {
         if (url === null) {
             inData = captureWebcam();
@@ -1461,11 +1567,14 @@ async function createDataCard(label = UNLABELED_IDX, url = null) {
 class EventHandler {
     static instance = null;
 
-    constructor() {
+    constructor({memorySize = MEMORY_SIZE, pendingSize = PENDING_SIZE} = {}) {
         if (EventHandler.instance !== null) {
             throw new Error("EventHandler instance already exists");
         }
         EventHandler.instance = this;
+
+        this.memorySize = memorySize;
+        this.pendingSize = pendingSize;
 
         this.renderPromise = null;
         this.isRendering = false;
@@ -1481,7 +1590,6 @@ class EventHandler {
     }
 
     async initialize() {
-        // TODO: Move here all the initialization code
         const inData = await loadImage("demo-pretrain-data/0/image1.png");
         tf.tidy(() => {
             const outData = modelHandler.model.predict(inData.Tensor);
@@ -1508,9 +1616,75 @@ class EventHandler {
             // Re-render the datacards and the similarities
             await similarityGridHandler.renderDataCards();
             await similarityGridHandler.renderSimilarities();
+
+            // Allow new data to be added
+            this.startRenderLoop();
         }
 
 
+    }
+
+    async updateMemorySize(newSize) {
+        if (newSize === this.memorySize) {
+            return;
+        }
+
+        // Stop new data from being added
+        this.stopRenderLoop();
+
+        // Update the memory size
+        this.memorySize = newSize;
+        await dataHandler.updateMemoryAndPendingSize({memorySize: newSize});
+        modelHandler.updateRandomIdxs();
+        await similarityGridHandler.updateMemorySize(newSize);
+
+        if (this.isStreamOn) {
+            // if the memory is not full, add card
+            for (let i = dataHandler.memoryEntries.length; i < newSize; i++) {
+                // TODO: Wait for the user to add labels instead of auto-adding
+                // Reason for not implementing now is to avoid confusion on UI
+                await createDataCard(0);
+            }
+            // flush it out with unlabeled cards
+            for (let i = 0; i < this.pendingSize; i++) {
+                await createDataCard(UNLABELED_IDX);
+            }
+
+            // Update the similarity grid
+            dataHandler.updateSimilarities();
+            await similarityGridHandler.renderSimilarities();
+
+            // Allow new data to be added
+            this.startRenderLoop();
+        }
+
+    }
+
+    async updatePendingSize(newSize) {
+        if (newSize === this.pendingSize) {
+            return;
+        }
+
+        // Stop new data from being added
+        this.stopRenderLoop();
+
+        // Update the pending size
+        this.pendingSize = newSize;
+        await dataHandler.updateMemoryAndPendingSize({pendingSize: newSize});
+        await similarityGridHandler.updatePendingSize(newSize);
+        
+        if (this.isStreamOn) {
+            // if the pending is not full, add card
+            for (let i = dataHandler.pendingEntries.length; i < newSize; i++) {
+                await createDataCard(UNLABELED_IDX);
+            }
+
+            // Update the similarity grid
+            dataHandler.updateSimilarities();
+            await similarityGridHandler.renderSimilarities();
+        }
+        
+        
         // Allow new data to be added
         this.startRenderLoop();
     }
@@ -1573,11 +1747,12 @@ class EventHandler {
     async updateSimilarityGridDOM() {
         this.similiarityGridFPS.update();
         // Update the DOM links
-        for (let i = 0; i < PENDING_SIZE; i++) {
-            similarityGridHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
-        }
-        for (let i = 0; i < MEMORY_SIZE; i++) {
+        const numMemoryEntries = dataHandler.memoryEntries.length;
+        for (let i = 0; i < numMemoryEntries; i++) {
             similarityGridHandler.memoryCards[i].dataEntry = dataHandler.memoryEntries[i];
+        }
+        for (let i = 0; i < this.pendingSize; i++) {
+            similarityGridHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
         }
         
         return Promise.all([
@@ -1586,7 +1761,7 @@ class EventHandler {
         ]);
     }
 
-    async updateData() {
+    updateData() {
         if (this.renderPromise !== null) {
             return;
         }
@@ -1627,7 +1802,7 @@ class EventHandler {
         return Promise.all(renderPromises);
     }
 
-    async keydown(event) {
+    keydown(event) {
         let label;
         switch (event.key.toLowerCase()) {
             case '1':
@@ -1892,6 +2067,32 @@ async function initializeFrontend() {
     document.getElementById("saveImages")
         .addEventListener("click", downloadAllImagesAsZip);
 
+    // set the default value
+    memSizeInput = document.getElementById("memory-size-input")
+    memSizeInput.value = MEMORY_SIZE;
+    memSizeInput.addEventListener("change", () => {
+            // check if the value is in the correct range
+            const min = parseInt(memSizeInput.min);
+            const max = parseInt(memSizeInput.max);
+            let value = parseInt(memSizeInput.value);
+
+            value = Math.min(max, Math.max(min, value));
+            memSizeInput.value = value;
+            eventHandler.updateMemorySize(value);
+        })
+
+    pendingSizeInput = document.getElementById("pending-size-input")
+    pendingSizeInput.value = PENDING_SIZE;
+    pendingSizeInput.addEventListener("change", () => {
+            // check if the value is in the correct range
+            const min = parseInt(pendingSizeInput.min);
+            const max = parseInt(pendingSizeInput.max);
+            let value = parseInt(pendingSizeInput.value);
+
+            value = Math.min(max, Math.max(min, value));
+            pendingSizeInput.value = value;
+            eventHandler.updatePendingSize(value);
+        });
 
     document.getElementById("arch-select")
         .addEventListener("change", () => eventHandler.reinitializeModel());
@@ -1916,9 +2117,9 @@ async function initializeFrontend() {
 
 
 // Initialize the application on page load
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initializeBackend();
-    initializeFrontend();
+    await initializeFrontend();
 });
 
 // stop the setInterval and webcam when the user switches tabs

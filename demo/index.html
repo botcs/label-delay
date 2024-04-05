@@ -80,11 +80,20 @@
 
         .svg-container {
             width: 90%;
+            overflow: hidden;
             /* height: 90vh; */
             display: flex;
             margin: auto;
             justify-content: center;
             padding: 1em;
+        }
+
+        .svg-container.prediction-container {
+            max-height: 15vh;
+        }
+
+        .svg-container.similarity-container {
+            max-height: 60vh;
         }
 
         .control-panel {
@@ -225,6 +234,17 @@
             margin: 0.1em;
         }
 
+        input[type=number] {
+            width: 38.5%;
+            font-size: 1.5vw;
+            /* padding: 0.5em; */
+            border-radius: 0.5em;
+            border: 2px solid gray;
+            font-family: 'EB Garamond', serif;
+            text-align: center;
+            margin: 0.1em;
+        }
+
         select:hover {
             border: 2px solid #3c78d8;
             filter: brightness(0.9);
@@ -248,7 +268,7 @@
 
 <body>
     <h1>Label Delay in Online Continual Learning</h1>
-    <div class="svg-container">
+    <div class="svg-container prediction-container">
         <svg id="prediction-card" style="width: 25%;" viewBox="0 0 255 150"></svg>
     </div>
     <div class="control-panel">
@@ -259,7 +279,7 @@
         </div>  
     </div>
     <!-- <div class="svg-container" style="visibility: hidden;"> -->
-    <div class="svg-container">
+    <div class="svg-container similarity-container">
         <svg id="similarity-grid" viewBox="0 0 1600 700"></svg>
     </div>
     <div class="control-panel">
@@ -271,8 +291,20 @@
     </div>
     <div class="control-panel">
         <div class="low-level-controls">
+            Delay (steps):
+            <input type="number" id="pending-size-input" value="3" min="1" max="100" title="
+This is the number of steps that the newest sample will be delayed before being available for training.
+
+The delay is implemented by moving the newest sample through the Pending Entries segment before it can be accessed for training.
+            ">
+            <br>
             Architecture:
-            <select id="arch-select">
+            <select id="arch-select" title="
+Select the architecture of the model. 
+The model is either randomly initialized with a fixed seed for reproducibility,
+or it is pretrained on ImageNet and fine-tuned on the current task.
+WARNING: Selecting a pretrained model will reset the learned features.
+            ">
                 <option value="none" disabled>Select Architecture</option>
                 <option value="linear" selected>Linear</option>
                 <option value="resnet18">ResNet18</option>
@@ -302,8 +334,16 @@
             </select>
         </div>
         <div class="low-level-controls">
+            Memory size:
+            <input type="number" id="memory-size-input" value="10" min="1" max="100" title="
+This is the number of samples that can be stored in the memory buffer.
+In each training step, two samples are selected from the memory buffer for training.
+            ">
+            <br>
             $X_1$ selection policy:
-            <select id="x1-policy-select">
+            <select id="x1-policy-select" title="
+Select the policy for selecting the first sample for each training step.
+            ">
                 <option value=null disabled select>X_1 selection policy</option>
                 <option value="random" selected>Random</option>
                 <option value="newest">Newest</option>
@@ -312,7 +352,9 @@
             </select>
             <br>
             $X_2$ selection policy:
-            <select id="x2-policy-select">
+            <select id="x2-policy-select" title="
+Select the policy for selecting the second sample for each training step.
+            ">
                 <option value=null disabled select>X_2 selection policy</option>
                 <option value="random2" selected>Random</option>
                 <option value="newest">Newest</option>
