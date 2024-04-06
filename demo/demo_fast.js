@@ -1656,10 +1656,9 @@ class EventHandler {
             // Update the similarity grid
             dataHandler.updateSimilarities();
             await similarityGridHandler.renderSimilarities();
-
             // Allow new data to be added
-            this.startRenderLoop();
         }
+        this.startRenderLoop();
 
     }
 
