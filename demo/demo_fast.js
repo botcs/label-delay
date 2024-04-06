@@ -391,9 +391,6 @@ class ModelHandler{
         await this.model.loadModel();
         this.numIterations = 0;
 
-        this.accuracies = [];
-        this.losses = [];
-
         similarityGridHandler.THETA_T.text(this.numIterations)
             .append("tspan")
             .attr("dy", "0.5em")
@@ -465,7 +462,6 @@ class ModelHandler{
                 const logits = this.model.forwardHead(features)[0];
                 const loss = lossFunction(data.labels, logits);
                 console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
-                losses.push(loss.dataSync());
                 return loss;
             });
         } else {
@@ -474,7 +470,6 @@ class ModelHandler{
                 const logits = this.model.forwardHead(features)[0];
                 const loss = lossFunction(data.labels, logits);
                 console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
-                losses.push(loss.dataSync());
                 return loss;
             });
         }
