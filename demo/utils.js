@@ -45,10 +45,6 @@ class customModelConnector {
             inputs: input, 
             outputs: [logit, proj]
         });
-    
-        // Warm up the model by training it once
-        const warmupData = tf.randomNormal([6].concat(backboneOutputShape));
-        const labels = tf.oneHot(tf.tensor1d([0,0,1,1,2,2], 'int32'), this.num_classes);
 
         // Summary
         console.log("Backbone:");

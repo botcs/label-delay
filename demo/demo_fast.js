@@ -389,7 +389,19 @@ class ModelHandler{
             optimizer: optimizer
         });
         await this.model.loadModel();
+        
         this.numIterations = 0;
+
+        // Warm up model by optimizing one iteration on
+        // a random data entry
+        const warmupX = tf.randomNormal([3, image_size, image_size, image_channels]);
+        const warmupY = tf.oneHot(tf.tensor1d([0, 1, 2], 'int32'), num_classes);
+        const warmupData = {input: warmupX, labels: warmupY};
+        this.updateModelParameters(warmupData, true);
+        // Dispose
+        warmupX.dispose()
+        warmupY.dispose()
+
 
         similarityGridHandler.THETA_T.text(this.numIterations)
             .append("tspan")
@@ -413,10 +425,6 @@ class ModelHandler{
         if (dataHandler.memoryEntries.length === 0) {
             throw new Error("At least one labeled data entry is required");
         }
-
-        // Train the model
-        const optimizer = this.model.optimizer;
-        const lossFunction = tf.losses.softmaxCrossEntropy;
 
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
         this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
@@ -454,25 +462,8 @@ class ModelHandler{
             }
         });
 
-        const useFrozenBackbone = this.model.architecture.includes("mobilenet");
-        if ( useFrozenBackbone) {
-            const features = this.model.forwardBackbone(data.input);
-            // Just exclude the backbone from the optimization
-            optimizer.minimize(() => {
-                const logits = this.model.forwardHead(features)[0];
-                const loss = lossFunction(data.labels, logits);
-                console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
-                return loss;
-            });
-        } else {
-            optimizer.minimize(() => {
-                const features = this.model.forwardBackbone(data.input);
-                const logits = this.model.forwardHead(features)[0];
-                const loss = lossFunction(data.labels, logits);
-                console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
-                return loss;
-            });
-        }
+        this.updateModelParameters(data);
+        
         data.input.dispose();
         data.labels.dispose();
 
@@ -494,6 +485,44 @@ class ModelHandler{
             similarityGridHandler.renderSimilarities();
         }
     })};
+
+    updateModelParameters(data, warmup=false){
+        let optimizer;
+        if (warmup){
+           optimizer = tf.train.adam(0.0);
+        } else {
+            optimizer = this.model.optimizer;
+        }
+        const lossFunction = tf.losses.softmaxCrossEntropy;
+
+        const useFrozenBackbone = this.model.architecture.includes("mobilenet");
+        if ( useFrozenBackbone) {
+            const features = this.model.forwardBackbone(data.input);
+            // Just exclude the backbone from the optimization
+            optimizer.minimize(() => {
+                const logits = this.model.forwardHead(features)[0];
+                const loss = lossFunction(data.labels, logits);
+                if (warmup){
+                    console.log(`Warmup complete!`);
+                } else {
+                    console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                }
+                return loss;
+            });
+        } else {
+            optimizer.minimize(() => {
+                const features = this.model.forwardBackbone(data.input);
+                const logits = this.model.forwardHead(features)[0];
+                const loss = lossFunction(data.labels, logits);
+                if (warmup){
+                    console.log(`Warmup complete!`);
+                } else {
+                    console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                }
+                return loss;
+            });
+        }
+    }
 }
 
 ////////////////////////////////////////
@@ -1611,10 +1640,9 @@ class EventHandler {
             // Re-render the datacards and the similarities
             await similarityGridHandler.renderDataCards();
             await similarityGridHandler.renderSimilarities();
-
-            // Allow new data to be added
-            this.startRenderLoop();
         }
+        // Allow new data to be added
+        this.startRenderLoop();
 
 
     }
@@ -1950,18 +1978,25 @@ const eventHandler = new EventHandler();
 
 
 async function fillSlots(useWebcam=true) {
-    const numSlots = eventHandler.pendingSize + eventHandler.memorySize;
     if (useWebcam) {
         // Fill the pending slots with webcam images
-        for (let i = 0; i < numSlots; i++) {
+        for (let i = 0; i < eventHandler.memorySize; i++) {
             await createDataCard(0);
+        }
+        for (let i = 0; i < eventHandler.pendingSize; i++) {
+            await createDataCard(UNLABELED_IDX);
         }
         modelHandler.randomIdx = Math.floor(Math.random() * dataHandler.memorySize);
         modelHandler.randomIdx2 = Math.floor(Math.random() * dataHandler.memorySize);
     } else {
         // Randomly select images from the dataset to fill all slot
         const data = [];
-        for (let i = 0; i < numSlots; i++) {
+        for (let i = 0; i < eventHandler.memorySize; i++) {
+            const label = Math.floor(Math.random() * 2);
+            const url = `demo-pretrain-data/${label}/image${i%5}.png`;
+            await createDataCard(label, url);
+        }
+        for (let i = 0; i < eventHandler.pendingSize; i++) {
             const label = Math.floor(Math.random() * 2);
             const url = `demo-pretrain-data/${label}/image${i%5}.png`;
             await createDataCard(label, url);
