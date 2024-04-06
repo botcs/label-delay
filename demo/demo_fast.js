@@ -7,8 +7,8 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3*3;
 const UNLABELED_IDX = 42;
 
-const MEMORY_SIZE = 10;
-const PENDING_SIZE = 7;
+const MEMORY_SIZE = 25;
+const PENDING_SIZE = 5;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 let REFRESH_RATE = 30;
@@ -1689,7 +1689,6 @@ class EventHandler {
             dataHandler.updateSimilarities();
             await similarityGridHandler.renderSimilarities();
         }
-        
         
         // Allow new data to be added
         this.startRenderLoop();

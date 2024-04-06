@@ -20,7 +20,9 @@
         src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
     </script>
     <meta charset="UTF-8">
-    <title>Label Delay Demo</title>
+    <title>Label Delay In Online Continual Learning</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <style>
         .datacard.category-42 .datacard-background {
             fill: #c5c5c3;
@@ -291,7 +293,7 @@
     </div>
     <div class="control-panel">
         <div class="low-level-controls">
-            Delay (steps):
+            Delay (Pending Entry size):
             <input type="number" id="pending-size-input" value="3" min="1" max="100" title="
 This is the number of steps that the newest sample will be delayed before being available for training.
 
@@ -334,7 +336,7 @@ WARNING: Selecting a pretrained model will reset the learned features.
             </select>
         </div>
         <div class="low-level-controls">
-            Memory size:
+            Memory Buffer size:
             <input type="number" id="memory-size-input" value="10" min="1" max="100" title="
 This is the number of samples that can be stored in the memory buffer.
 In each training step, two samples are selected from the memory buffer for training.
@@ -387,40 +389,111 @@ Select the policy for selecting the second sample for each training step.
     <script src="demo_fast.js"></script>
     <div id="explanation">
         <h2>
-            How to use this demo:
+            Manual:
         </h2>
         <p>
-            This demo shows an instance of the label delay problem.
-            The goal is to train a model on a stream of data points, where each data point is associated with a label.
-            In this scenario the delay is 3 steps.
-            As you can see, there are three slots in the Pending Entries segment, which means that
-            the newest sample will not be available for training until three new cards have been added.
-            Only once they have moved to the Memory Buffer segment, they can be accessed for training.
+            This demo shows an instance of a realistic online learning problem.
+            The stream of data points is collected from the webcam, and therefore it is under your full control how much the data-distribution is shifting.
+            
+            When you press one of the "Add Category" buttons, the newest sample will be associated with the corresponding label.
+            There is no restriction what you can teach to your computer, everything is computed locally on your device, i.e. no data is sent to the server at all.
+            
+            In every step the data flows from the top of the Pending Entries to the bottom, and if the data point is labeled, it will be moved to the Memory Buffer.
+
+            As you can see, there are a few slots in the Pending Entries, which means that
+            the newest sample will not be available for training until the sample does not receive it's label.
+
+            You can train the model by pressing the "Train Model" button, which will update the model parameters based on the selected samples.
+        </p>
+        <p>
+            The main purpose of this simulation is to highlight how label delay can affect the performance of the model.
+            In the main paper, we propose the <b>Importance Weighted Memory Sampling (IWMS)</b> method, which is a compute-efficient technique that simply just reuses the feature embeddings (that were computed anyways during the forward pass) to emulate the distribution of the newest samples during the memory rehearsal.
+            To show that our method truly brings benefits, we implemented a wide range of environment settings.
+        </p>
+        <h3>
+            The Environment Settings
+        </h3>
+        <p>
+            <ul>
+                <li>The sampling rate of the stream</li>
+                <li>The delay $d$ between observing the newest sample and receiving its label</li>
+                <li>The memory buffer size</li>
+                <li>The architecture of the model: 7 architectures, 2 pretrained</li>
+                <li>The optimizer (SGD, SGD w/ momentum, Adam)</li>
+                <li>The learning rate</li>
+                <li>The selection policy for the first and second sample</li>
+                <li>Whether to update features after each training iteration</li>
+            </ul>
+        </p>
+        <h3>
+            The Prediction Card
+        </h3>
+        <p>
+            The prediction card can be found on the top of the page.
+            It consists of three blocks: the input image, the computed features and the prediction.
+            The features are computed by the backbone architecture and are always projected to a 9-dimensional space.
+            In the middle block you can find the feature embeddings arranged in a 3x3 grid, where the sizes of the circles represent the values of the embeddings.
+            A little technical detail: the embeddings can be in the range of $[-\inf, \inf]$, and the size of the circle sizes are always normalized to the range of $[0, 1]$ for each data point.
+            Finally, the actual prediction is shown in the rightmost block by the three circles representing the class probabilities.
+
+            If you turn your webcam on, the newest sample will be the current frame and you will see how the embeddings are changing in real-time.
+            It is interesting to see how the embeddings are changing when you are moving around, or when you are changing the lighting conditions.
+            Different architectures respond quite differently to the same kind of visual changes, which can be also thought of as a characteristic of the architecture and of course the pretraining.
+            For example, the linear model is very sensitive to every small change, while the MobileNetV2 features (which were pretrained on ImageNet) will mostl likely change very little when you change lighting conditions or rotate the object.
+
+            Just like the feature embeddings, the prediction values are also updated in real-time, and the color of the largest circle is the argmax of the predicted probabilities.
         </p>
         <h3>
             The Datacards
         </h3>
         <p>
-            Each card represents a data point and the cirlces represent the corresponding feature embeddings.
-            There are 3 categories of data points, each with a different color.
-            The data arrives on the top left corner, and slowly moves to the end of the Pending Entries segment.
-            If they are unlabeled (gray), they are discarded, otherwise they are moved to the Memory Buffer segment.
-            A new data card can be added by pressing one of the "Add Category" buttons (or by pressing the corresponding key on the keyboard)
+            If you click on the "Start Data Stream" button, the datacards will start to flow from the top to the bottom of the pending entries (with a default Categor 1 label), and straight away get added to the memory buffer.
+            This is nicely animated in the beginning, but to avoid the moving parts, once the datacards fill up the edges of the grid, you will only see the content of the datacards being swapped out (instead of moving the cards themselves).
 
-            
+            When you change the Pending Entry or the Memory Buffer size, new datacards will be added or removed accordingly.
+        
+            Similarly to the prediction card, the datacards are also showing the feature embeddings in a 3x3 grid.
+            The color of the background of the datacard indicates the category of the sample.
         </p>
         <h3>
             The Model
         </h3>
         <p>
-            The model is a 2-layer convnet, randomly initialized with a fixed seed for reproducibility. 
+            By default, the model is a linear model, randomly initialized with a fixed seed for reproducibility.
+            Although a linear model might be too simple to learn generalizable features, you will be surprised how well it can perform when you have a small delay between the newest sample and the labeled data.
+
+            To explore the performance of more complex models, you can select from the following architectures:
+            <ul>
+                <li>ResNet18</li>
+                <li>CNN Small</li>
+                <li>CNN Base</li>
+                <li>CNN Large</li>
+                <li>MobileNetV2 (ImageNet pretrained)</li>
+                <li>MobileNetV3 (ImageNet pretrained)</li>
+            </ul>
+            After the model selection you can start tuning the model parameters on the currently available memory samples, but be careful: the learned features are reset when the architecture is changed.
+            <!-- The model is a 2-layer convnet, randomly initialized with a fixed seed for reproducibility. 
             The model parameters are updated by pressing the "Train Model" button.
             The update takes a single SGD step with a learning rate of 0.001 on the two selected samples.
-            The loss function is the cross-entropy loss.
+            The loss function is the cross-entropy loss. -->
 
-            Each time the model is trained on two samples: one randomly selected sample ($X_\textrm{RND}$) and one sample selected from the memory buffer ( $X_\textrm{IWM}$ ).
-            The selection is based on the Cosine Similarity between the embeddings of the newest sample (top left) and the embeddings of the samples in the memory buffer.
+            When you click on the "Train Model" button, a green bar will start to fill up, indicating the cycles in which the model parameters are updated (set to 3 sec).
+            In every iteration, the standard Cross Entropy objective is optimized on two samples: $X_1$ and $X_2$.
+
         </p>
+        <h3>
+            Selection Policies
+        </h3>
+        <p>
+            The selection policy for the first and second sample can be set to one of the following:
+            <ul>
+                <li>Random: samples are selected randomly from the memory buffer</li>
+                <li>Newest: the newest sample is selected</li>
+                <li>Second Newest: the second newest sample is selected</li>
+                <li>Importance Weighted Memory: the nearest neighbor of the newest sample (in the feature space) is selected</li>
+            </ul>
+            The Importance Weighted Memory Sampling policy is a compute-efficient technique that simply just reuses the feature embeddings (that were computed anyways during the forward pass) to emulate the distribution of the newest samples during the memory rehearsal.
+            This can have a significant impact on the performance of the model, especially when the newest sample is delayed for a long time.
         <h3>
             The Similarity Grid
         </h3>
