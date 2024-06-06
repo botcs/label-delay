@@ -142,7 +142,7 @@
         #addCategory0:hover {
             background-color: #f9cb9c;
         }
-        #addCategory0:active {
+        #addCategory0:active, #addCategory0.active  {
             background-color: #fbb167;
         }
 
@@ -153,7 +153,7 @@
         #addCategory1:hover {
             background-color: #a4c2f4;
         }
-        #addCategory1:active {
+        #addCategory1:active, #addCategory1.active  {
             background-color: #8db3f4;
         }
 
@@ -164,7 +164,7 @@
         #addCategory2:hover {
             background-color: #b6d7a8;
         }
-        #addCategory2:active {
+        #addCategory2:active, #addCategory2.active  {
             background-color: #a2d08c;
         }
 
@@ -286,9 +286,9 @@
         <svg id="similarity-grid" viewBox="0 0 1600 700"></svg>
     </div>
     <div class="control-panel">
-        <button id="addCategory0">Add Category 1</button>
-        <button id="addCategory1">Add Category 2</button>
-        <button id="addCategory2">Add Category 3</button>
+        <button id="addCategory0" class="addCategoryButton">Add Category 1</button>
+        <button id="addCategory1" class="addCategoryButton" >Add Category 2</button>
+        <button id="addCategory2" class="addCategoryButton">Add Category 3</button>
         <button id="trainModel">Train Model</button>
         <button id="saveImages">Save Images</button>
     </div>
@@ -359,10 +359,10 @@ Select the policy for selecting the first sample for each training step.
 Select the policy for selecting the second sample for each training step.
             ">
                 <option value=null disabled select>X_2 selection policy</option>
-                <option value="random2" selected>Random</option>
+                <option value="random2">Random</option>
                 <option value="newest">Newest</option>
                 <option value="second-newest">Second Newest</option>
-                <option value="iwm">Importance Weighted Memory</option>
+                <option value="iwm" selected>Importance Weighted Memory</option>
             </select>
             <br>
             Update features after training:

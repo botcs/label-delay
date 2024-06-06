@@ -8,7 +8,7 @@ const NUM_FEATURES = 3*3;
 const UNLABELED_IDX = 42;
 
 const MEMORY_SIZE = 25;
-const PENDING_SIZE = 5;
+const PENDING_SIZE = 1;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 let REFRESH_RATE = 30;
@@ -952,7 +952,7 @@ class SimilarityGridHandler {
         this.offset = offset;
 
         this.X1Policy = "random";
-        this.X2Policy = "random2";
+        this.X2Policy = "iwm";
 
         this.memoryCards = [];
         this.pendingCards = [];
@@ -1701,7 +1701,7 @@ class EventHandler {
         if (this.isStreamOn) {
             // if the pending is not full, add card
             if (dataHandler.pendingEntries.length < newSize) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // await new Promise(resolve => setTimeout(resolve, 500));
                 for (let i = dataHandler.pendingEntries.length; i < newSize; i++) {
                     await createDataCard(UNLABELED_IDX);
                 }
@@ -1849,10 +1849,16 @@ class EventHandler {
                 break;
         }
         this.nextLabel = label;
+
+        // Make the button appear pressed using the ".active" css class
+        const button = d3.select(`#addCategory${label}`);
+        button.classed("active", true);
     }
 
     async keyup(event) {
         this.nextLabel = UNLABELED_IDX;
+        // Remove the ".active" css class
+        d3.selectAll(".addCategoryButton").classed("active", false);
     }
 
     async renderLoop() {
