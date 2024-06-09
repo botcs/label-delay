@@ -68,6 +68,44 @@ class FPSCounter {
 }
 
 
+class VisualizationManager {
+    constructor(updateInterval = 200) {
+        this.updateInterval = updateInterval; // Minimum interval between updates in milliseconds
+        this.lastUpdateTime = 0;
+        this.timeoutId = null;
+    }
+
+    addData(newData) {
+        this.scheduleUpdate(newData);
+    }
+
+    scheduleUpdate(newData) {
+        const now = Date.now();
+        const timeSinceLastUpdate = now - this.lastUpdateTime;
+
+        if (timeSinceLastUpdate >= this.updateInterval) {
+            this.updateVisualization(newData);
+        } else {
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId); // Cancel the existing timeout
+            }
+            this.timeoutId = setTimeout(() => {
+                this.updateVisualization(newData);
+            }, this.updateInterval - timeSinceLastUpdate);
+        }
+    }
+
+    updateVisualization(newData) {
+        const surface = {name: newData.name, tab: newData.tab};
+        const axisSettings = {xLabel: newData.xLabel, yLabel: newData.yLabel, height: 300};
+        tfvis.show.history(surface, newData.history, newData.yLabel, axisSettings);
+
+        this.lastUpdateTime = Date.now();
+        this.timeoutId = null;
+    }
+}
+
+
 
 class DataEntry {
     static count = 0;
@@ -435,6 +473,27 @@ class ModelHandler{
     }
 
 
+    plotStats() {
+        // Plot the running statistics, i.e. loss and accuracy
+        // let surface = {name: "Training Loss over time", tab: "Training"};
+        // let axisSettings = {xLabel: 'Training Iteration', yLabel: 'Loss', height: 300};
+        // tfvis.show.history(surface, visorFormattedLoss, ["val"], axisSettings);
+
+        // surface = {name: "Training Accuracy over time", tab: "Training"};
+        // axisSettings = {xLabel: 'Training Iteration', yLabel: 'Accuracy', height: 300};
+        // tfvis.show.history(surface, visorFormattedAccuracy, ["val"], axisSettings);
+
+        // surface = {name: "Validation Loss over time", tab: "Online Validation"};
+        // axisSettings = {xLabel: 'Training Iteration', yLabel: 'Loss', height: 300};
+        // visorFormattedLoss = this.valLosses.map(val => ({val: val}));
+        // tfvis.show.history(surface, visorFormattedLoss, ["val"], axisSettings);
+
+
+        const surface = {name: "Validation Accuracy over time", tab: "Online Validation"};
+        const axisSettings = {xLabel: 'Training Iteration', yLabel: 'Accuracy', height: 300};
+        tfvis.show.history(surface, this.valHistory, ["onlineAccuracy"], axisSettings);
+    }
+
     evaluateModel(memoryEntryIdx=0) {
         // Evaluate the model on the memory entry
         const historyEntry = {};
@@ -560,6 +619,7 @@ class ModelHandler{
             const correct = tf.equal(tf.argMax(pred, 1), tf.argMax(data.labels, 1));
             return correct.sum().dataSync()[0] / data.labels.shape[0];
         });
+        // this.trainAccuracies.push(accuracy);
 
         const lossFunction = tf.losses.softmaxCrossEntropy;
         const useFrozenBackbone = this.model.architecture.includes("mobilenet");
@@ -574,6 +634,7 @@ class ModelHandler{
                 } else {
                     console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
                 }
+                // trainLosses.push(loss.dataSync()[0]);
                 return loss;
             });
         } else {
@@ -586,6 +647,7 @@ class ModelHandler{
                 } else {
                     console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
                 }
+                // this.trainLosses.push(loss.dataSync()[0]);  
                 return loss;
             });
         }
@@ -1981,9 +2043,14 @@ class EventHandler {
     async initializeModel() {
         await modelHandler.initializeModel({architecture: ARCHITECTURE, optimizer: OPTIMIZER});
 
+        tfvis.visor().open();
+
+        // Start the visor minimized
+        tfvis.visor().toggle();
 
         dataHandler.onNewMemoryEntry = () => {
             modelHandler.evaluateModel();
+            modelHandler.plotStats();
         }
         const button = document.getElementById("initializeWebcam");
         button.disabled = false;
