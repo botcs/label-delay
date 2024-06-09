@@ -68,6 +68,7 @@ class FPSCounter {
 }
 
 
+
 class DataEntry {
     static count = 0;
     constructor(inData, outData = null, label = UNLABELED_IDX) {tf.tidy(() => {
@@ -75,13 +76,19 @@ class DataEntry {
 
         this.inData.Tensor = tf.variable(inData.Tensor);
 
+        // A [NUM_CLASSES] tensor representing the class logits
+        this.logit = tf.variable(tf.squeeze(outData[0]));
+
         // A [NUM_CLASES] tensor representing the class probabilities
-        this.pred = tf.variable(tf.squeeze(tf.softmax(outData[0])));
+        this.pred = tf.variable(tf.softmax(this.logit));
 
         // A [NUM_FEATURES] tensor representing the feature vector
         const feat = outData[1];
         this.feat = tf.variable(tf.squeeze(feat.div(feat.norm(2))));
-        this.label = label; // A string or number representing the label
+
+        // cast to integer
+        this.label = parseInt(label);
+        
         this.id = DataEntry.count;
 
 
@@ -92,6 +99,7 @@ class DataEntry {
 
     dispose() {
         this.inData.Tensor.dispose();
+        this.logit.dispose();
         this.pred.dispose();
         this.feat.dispose();
     }
@@ -102,6 +110,10 @@ class DataEntry {
             [this.pred.clone(), this.feat.clone()],
             this.label
         ));
+    }
+
+    setLabel(label) {
+        this.label = parseInt(label);
     }
 }
 
@@ -123,11 +135,14 @@ class DataHandler {
         this.pendingEntries = [];
 
 
-        // Use this to store the cosine similarities
+        // Store the cosine similarities
         this.similarities = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
 
-        // Use this to store softmax scores
+        // Store softmax scores
         this.scores = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
+
+        // Callback for new memory entry
+        this.onNewMemoryEntry = null;
     }
 
     updateMemoryAndPendingSize({
@@ -261,6 +276,11 @@ class DataHandler {
                 this.similarities.assign(this.unshiftAndPop(
                     this.similarities, simMemToPen, 1
                 ));
+
+                // Call the New Memory Entry callback
+                if (this.onNewMemoryEntry !== null) {
+                    this.onNewMemoryEntry();
+                }
             } else {
                 transitionEntry.dispose();
             }
@@ -360,6 +380,10 @@ class ModelHandler{
         this.X1Policy = "random";
         this.X2Policy = "random2";
         this.updateFeatures = true;
+
+        this.numIterations = 0;
+        this.valHistory = [];
+        this.trainHistory = [];
     }
     
     async initializeModel({
@@ -408,6 +432,41 @@ class ModelHandler{
             .attr("dy", "0.5em")
             .text("=train(");
 
+    }
+
+
+    evaluateModel(memoryEntryIdx=0) {
+        // Evaluate the model on the memory entry
+        const historyEntry = {};
+
+        const memoryEntry = dataHandler.memoryEntries[memoryEntryIdx];
+        const logit = memoryEntry.logit;
+        const label = memoryEntry.label;
+        const pred = memoryEntry.pred;
+        
+        const lossFunction = tf.losses.softmaxCrossEntropy;
+        const loss = lossFunction(
+            tf.oneHot([label], NUM_CLASSES),
+            tf.reshape(logit, [1, NUM_CLASSES])
+        ).dataSync()[0];
+        historyEntry.loss = loss;
+
+        const predIdx = pred.argMax().dataSync()[0];
+        const labelIdx = memoryEntry.label;
+
+        const accuracy = predIdx === labelIdx ? 1. : 0.;
+        historyEntry.accuracy = accuracy;
+
+        if (this.valHistory.length === 0) {
+            historyEntry.onlineAccuracy = accuracy;
+        } else {
+            const len = this.valHistory.length;
+            const prevOA = this.valHistory[len-1].onlineAccuracy;
+            const newOA = prevOA + (accuracy - prevOA) / len;
+            historyEntry.onlineAccuracy = newOA;
+        }
+
+        this.valHistory.push(historyEntry);
     }
 
     changeOptimizer(optimizer) {
@@ -493,10 +552,18 @@ class ModelHandler{
         } else {
             optimizer = this.model.optimizer;
         }
-        const lossFunction = tf.losses.softmaxCrossEntropy;
 
+        let accuracy = tf.tidy(() => {
+            const features = this.model.forwardBackbone(data.input);
+            const logits = this.model.forwardHead(features)[0];
+            const pred = tf.softmax(logits);
+            const correct = tf.equal(tf.argMax(pred, 1), tf.argMax(data.labels, 1));
+            return correct.sum().dataSync()[0] / data.labels.shape[0];
+        });
+
+        const lossFunction = tf.losses.softmaxCrossEntropy;
         const useFrozenBackbone = this.model.architecture.includes("mobilenet");
-        if ( useFrozenBackbone) {
+        if (useFrozenBackbone) {
             const features = this.model.forwardBackbone(data.input);
             // Just exclude the backbone from the optimization
             optimizer.minimize(() => {
@@ -1767,7 +1834,7 @@ class EventHandler {
         // but only moving the content and not the DOM elements
 
         const newestDataEntry = dataHandler.currentEntry.clone();
-        newestDataEntry.label = this.nextLabel;
+        newestDataEntry.setLabel(this.nextLabel);
         dataHandler.addDataEntry(newestDataEntry);
     }
 
@@ -1807,7 +1874,9 @@ class EventHandler {
 
         tf.tidy(() => {
             dataHandler.updateCurrentEntry(dataEntry);
-            this.updateSimilarityGridData();
+            if (this.isStreamOn) {
+                this.updateSimilarityGridData();
+            }
         });
     }
 
@@ -1833,13 +1902,13 @@ class EventHandler {
         let label;
         switch (event.key.toLowerCase()) {
             case '1':
-                label = '0';
+                label = 0;
                 break;
             case '2':
-                label = '1';
+                label = 1;
                 break;
             case '3':
-                label = '2';
+                label = 2;
                 break;
             case 't':
                 this.toggleTraining();
@@ -1861,14 +1930,14 @@ class EventHandler {
         d3.selectAll(".addCategoryButton").classed("active", false);
     }
 
-    async renderLoop() {
+    renderLoop() {
         if (!this.isRendering) {
             return;
         }
 
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {
             this.lastRender = performance.now();
-            await this.updateData();
+            this.updateData();
             this.updateDOM();
         }
         window.requestAnimationFrame(() => {
@@ -1911,6 +1980,11 @@ class EventHandler {
 
     async initializeModel() {
         await modelHandler.initializeModel({architecture: ARCHITECTURE, optimizer: OPTIMIZER});
+
+
+        dataHandler.onNewMemoryEntry = () => {
+            modelHandler.evaluateModel();
+        }
         const button = document.getElementById("initializeWebcam");
         button.disabled = false;
         button.textContent = "Enable Webcam";
@@ -2080,7 +2154,7 @@ async function initializeFrontend() {
         if (isMobile) {
             // on mobile the touchstart and touchend events are used
             button.addEventListener("touchstart", () => {
-                eventHandler.nextLabel = i.toString();
+                eventHandler.nextLabel = i;
             });
             button.addEventListener("touchend", () => {
                 eventHandler.nextLabel = UNLABELED_IDX;
@@ -2088,7 +2162,7 @@ async function initializeFrontend() {
         } else {
             // on holding the button, the label is set to i
             button.addEventListener("mousedown", () => {
-                eventHandler.nextLabel = i.toString();
+                eventHandler.nextLabel = i;
             });
             button.addEventListener("mouseup", () => {
                 eventHandler.nextLabel = UNLABELED_IDX;
