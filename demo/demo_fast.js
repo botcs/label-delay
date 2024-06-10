@@ -1975,12 +1975,6 @@ class EventHandler {
 
     async initializeModel() {
         await modelHandler.initializeModel({architecture: ARCHITECTURE, optimizer: OPTIMIZER});
-
-        tfvis.visor().open();
-
-        // Start the visor minimized
-        tfvis.visor().toggle();
-
         dataHandler.onNewMemoryEntry = () => {
             modelHandler.evaluateModel();
         }

@@ -256,6 +256,8 @@ class VisLogger {
         yLabel = "Y",
         height = 300,
     }) {
+        tfvis.visor().close();
+
         this.numUpdates = 0;
         this.X = [];
         this.Y = [];
