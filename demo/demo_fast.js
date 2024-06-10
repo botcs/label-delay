@@ -31,82 +31,6 @@ const TRAIN_REPEAT_INTERVAL = 1000;
 ////////////////////////////////////////
 // BACKEND
 ////////////////////////////////////////
-class FPSCounter {
-    constructor(name, warmup=5000, periodicLog=5000) {
-        this.frames = 0;
-        this.lastFPS = -1;
-        this.startTime = performance.now();
-        this.warmup = warmup;
-
-        this.periodicLog = periodicLog;
-        this.lastLog = performance.now();
-
-        this.name = name;
-    }
-
-    update() {
-        this.frames++;
-        const currentTime = performance.now();
-        const elapsedTime = currentTime - this.startTime;
-        if (elapsedTime > this.warmup) {
-            this.lastFPS = this.frames / (elapsedTime / 1000);
-            this.startTime = currentTime;
-            
-            if (currentTime - this.lastLog > this.periodicLog) {
-                this.lastLog = currentTime;
-                this.log();
-            }
-            
-            this.frames = 0;
-        }
-    }
-
-    log() {
-        console.log(`${this.name} - moving avg FPS: ${this.lastFPS.toFixed(2)}`);
-        console.log(`Number of tensors: ${tf.memory().numTensors}`);
-    }
-}
-
-
-class VisualizationManager {
-    constructor(updateInterval = 200) {
-        this.updateInterval = updateInterval; // Minimum interval between updates in milliseconds
-        this.lastUpdateTime = 0;
-        this.timeoutId = null;
-    }
-
-    addData(newData) {
-        this.scheduleUpdate(newData);
-    }
-
-    scheduleUpdate(newData) {
-        const now = Date.now();
-        const timeSinceLastUpdate = now - this.lastUpdateTime;
-
-        if (timeSinceLastUpdate >= this.updateInterval) {
-            this.updateVisualization(newData);
-        } else {
-            if (this.timeoutId) {
-                clearTimeout(this.timeoutId); // Cancel the existing timeout
-            }
-            this.timeoutId = setTimeout(() => {
-                this.updateVisualization(newData);
-            }, this.updateInterval - timeSinceLastUpdate);
-        }
-    }
-
-    updateVisualization(newData) {
-        const surface = {name: newData.name, tab: newData.tab};
-        const axisSettings = {xLabel: newData.xLabel, yLabel: newData.yLabel, height: 300};
-        tfvis.show.history(surface, newData.history, newData.yLabel, axisSettings);
-
-        this.lastUpdateTime = Date.now();
-        this.timeoutId = null;
-    }
-}
-
-
-
 class DataEntry {
     static count = 0;
     constructor(inData, outData = null, label = UNLABELED_IDX) {tf.tidy(() => {
@@ -419,9 +343,34 @@ class ModelHandler{
         this.X2Policy = "random2";
         this.updateFeatures = true;
 
-        this.numIterations = 0;
-        this.valHistory = [];
-        this.trainHistory = [];
+        this.numTrainIterations = 0;
+        this.numValIterations = 0;
+        this.countCorrect = 0;
+        this.valAccuracies = new VisLogger({
+            name: "Validation Accuracy",
+            tab: "Online Evaluation",
+            yLabel: "Accuracy",
+        });
+        this.valOnlineAccuracies = new VisLogger({
+            name: "Validation Online Accuracy",
+            tab: "Online Evaluation",
+            yLabel: "Online Accuracy",
+        });
+        this.valLosses = new VisLogger({
+            name: "Validation Loss",
+            tab: "Online Evaluation",
+            yLabel: "Loss",
+        });
+        this.trainAccuracies = new VisLogger({
+            name: "Training Accuracy",
+            tab: "Training",
+            yLabel: "Accuracy",
+        });
+        this.trainLosses = new VisLogger({
+            name: "Training Loss",
+            tab: "Training",
+            yLabel: "Loss",
+        });
     }
     
     async initializeModel({
@@ -452,7 +401,7 @@ class ModelHandler{
         });
         await this.model.loadModel();
         
-        this.numIterations = 0;
+        this.numTrainIterations = 0;
 
         // Warm up model by optimizing one iteration on
         // a random data entry
@@ -465,39 +414,14 @@ class ModelHandler{
         warmupY.dispose()
 
 
-        similarityGridHandler.THETA_T.text(this.numIterations)
+        similarityGridHandler.THETA_T.text(this.numTrainIterations)
             .append("tspan")
             .attr("dy", "0.5em")
             .text("=train(");
 
     }
 
-
-    plotStats() {
-        // Plot the running statistics, i.e. loss and accuracy
-        // let surface = {name: "Training Loss over time", tab: "Training"};
-        // let axisSettings = {xLabel: 'Training Iteration', yLabel: 'Loss', height: 300};
-        // tfvis.show.history(surface, visorFormattedLoss, ["val"], axisSettings);
-
-        // surface = {name: "Training Accuracy over time", tab: "Training"};
-        // axisSettings = {xLabel: 'Training Iteration', yLabel: 'Accuracy', height: 300};
-        // tfvis.show.history(surface, visorFormattedAccuracy, ["val"], axisSettings);
-
-        // surface = {name: "Validation Loss over time", tab: "Online Validation"};
-        // axisSettings = {xLabel: 'Training Iteration', yLabel: 'Loss', height: 300};
-        // visorFormattedLoss = this.valLosses.map(val => ({val: val}));
-        // tfvis.show.history(surface, visorFormattedLoss, ["val"], axisSettings);
-
-
-        const surface = {name: "Validation Accuracy over time", tab: "Online Validation"};
-        const axisSettings = {xLabel: 'Training Iteration', yLabel: 'Accuracy', height: 300};
-        tfvis.show.history(surface, this.valHistory, ["onlineAccuracy"], axisSettings);
-    }
-
     evaluateModel(memoryEntryIdx=0) {
-        // Evaluate the model on the memory entry
-        const historyEntry = {};
-
         const memoryEntry = dataHandler.memoryEntries[memoryEntryIdx];
         const logit = memoryEntry.logit;
         const label = memoryEntry.label;
@@ -508,24 +432,18 @@ class ModelHandler{
             tf.oneHot([label], NUM_CLASSES),
             tf.reshape(logit, [1, NUM_CLASSES])
         ).dataSync()[0];
-        historyEntry.loss = loss;
+        this.valLosses.push(loss);
 
         const predIdx = pred.argMax().dataSync()[0];
         const labelIdx = memoryEntry.label;
 
         const accuracy = predIdx === labelIdx ? 1. : 0.;
-        historyEntry.accuracy = accuracy;
+        this.valAccuracies.push(accuracy);
 
-        if (this.valHistory.length === 0) {
-            historyEntry.onlineAccuracy = accuracy;
-        } else {
-            const len = this.valHistory.length;
-            const prevOA = this.valHistory[len-1].onlineAccuracy;
-            const newOA = prevOA + (accuracy - prevOA) / len;
-            historyEntry.onlineAccuracy = newOA;
-        }
-
-        this.valHistory.push(historyEntry);
+        this.countCorrect += accuracy;
+        this.numValIterations++;
+        const onlineAccuracy = this.countCorrect / this.numValIterations;
+        this.valOnlineAccuracies.push(onlineAccuracy);
     }
 
     changeOptimizer(optimizer) {
@@ -585,8 +503,8 @@ class ModelHandler{
         data.input.dispose();
         data.labels.dispose();
 
-        this.numIterations++;
-        similarityGridHandler.THETA_T.text(this.numIterations)
+        this.numTrainIterations++;
+        similarityGridHandler.THETA_T.text(this.numTrainIterations)
             .append("tspan")
             .attr("dy", "0.5em")
             .text("=train(");
@@ -619,7 +537,7 @@ class ModelHandler{
             const correct = tf.equal(tf.argMax(pred, 1), tf.argMax(data.labels, 1));
             return correct.sum().dataSync()[0] / data.labels.shape[0];
         });
-        // this.trainAccuracies.push(accuracy);
+        this.trainAccuracies.push({y: accuracy});
 
         const lossFunction = tf.losses.softmaxCrossEntropy;
         const useFrozenBackbone = this.model.architecture.includes("mobilenet");
@@ -632,9 +550,9 @@ class ModelHandler{
                 if (warmup){
                     console.log(`Warmup complete!`);
                 } else {
-                    console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                    console.log(`Training iteration: ${this.numTrainIterations} - Loss: ${loss.dataSync()}`);
                 }
-                // trainLosses.push(loss.dataSync()[0]);
+                this.trainLosses.push(loss.dataSync()[0]);
                 return loss;
             });
         } else {
@@ -645,9 +563,9 @@ class ModelHandler{
                 if (warmup){
                     console.log(`Warmup complete!`);
                 } else {
-                    console.log(`Training iteration: ${this.numIterations} - Loss: ${loss.dataSync()}`);
+                    console.log(`Training iteration: ${this.numTrainIterations} - Loss: ${loss.dataSync()}`);
                 }
-                // this.trainLosses.push(loss.dataSync()[0]);  
+                this.trainLosses.push(loss.dataSync()[0]);  
                 return loss;
             });
         }
@@ -1726,6 +1644,7 @@ class EventHandler {
         }
         EventHandler.instance = this;
 
+        this.startTime = performance.now();
         this.memorySize = memorySize;
         this.pendingSize = pendingSize;
 
@@ -1740,6 +1659,20 @@ class EventHandler {
         this.isStreamOn = false;
 
         this.similiarityGridFPS = new FPSCounter("SimilarityGrid FPS");
+
+
+        // FOR DEBUG PURPOSES
+        // Periodically log the number of tensors
+        this.numTensorLogger = new VisLogger({
+            name: "Number of Tensors over Time",
+            tab: "Debug",
+            xLabel: "Time",
+            yLabel: "Number of Tensors",
+        });
+        setInterval(() => {
+            const elapsed = Math.floor((performance.now() - this.startTime)/1000);
+            this.numTensorLogger.push({x: elapsed, y: tf.memory().numTensors});
+        }, 1000);
     }
 
     async initialize() {
@@ -2050,7 +1983,6 @@ class EventHandler {
 
         dataHandler.onNewMemoryEntry = () => {
             modelHandler.evaluateModel();
-            modelHandler.plotStats();
         }
         const button = document.getElementById("initializeWebcam");
         button.disabled = false;
