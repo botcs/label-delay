@@ -255,6 +255,7 @@ class VisLogger {
         xLabel = "Iteration",
         yLabel = "Y",
         height = 300,
+        maxSize = 150,
     }) {
         tfvis.visor().close();
 
@@ -264,7 +265,7 @@ class VisLogger {
         this.yLabel = yLabel;
         this.surface = tfvis.visor().surface({ name: name, tab: tab });
         this.axisSettings = { xLabel: xLabel, yLabel: yLabel, height: height };
-
+        this.maxSize = maxSize;
         this.lastUpdateTime = 0;
         this.timeoutId = null;
 
@@ -325,11 +326,14 @@ class VisLogger {
         this.X.push(x);
         this.Y.push(y);
 
-        if (this.X.length > 150) {
-            // Subsample the data if it gets too long
-            this.X = this.X.filter((_, i) => i % 2 === 0);
-            this.Y = this.Y.filter((_, i) => i % 2 === 0);
-            
+        if (this.X.length > this.maxSize) {
+            const points = this.X.map((x, index) => ({ x, y: this.Y[index] }));
+            const numReducedPoints = Math.floor(this.maxSize * 0.7);
+            const reducedPoints = this.largestTriangleThreeBuckets(points, numReducedPoints);
+
+            this.X = reducedPoints.map(p => p.x);
+            this.Y = reducedPoints.map(p => p.y);
+
             this.chart.data.labels = this.X;
             this.chart.data.datasets[0].data = this.Y;
         }
@@ -338,32 +342,49 @@ class VisLogger {
         this.numUpdates++;
     }
 
-    scheduleUpdate() {
-        const now = Date.now();
-        const timeSinceLastUpdate = now - this.lastUpdateTime;
-
-        if (timeSinceLastUpdate >= this.updateInterval) {
-            this.updateVisualization();
-        } else {
-            if (this.timeoutId) {
-                clearTimeout(this.timeoutId); // Cancel the existing timeout
-            }
-            this.timeoutId = setTimeout(() => {
-                this.updateVisualization();
-            }, this.updateInterval - timeSinceLastUpdate);
+    largestTriangleThreeBuckets(data, threshold) {
+        if (threshold >= data.length || threshold === 0) {
+            return data; // No subsampling needed
         }
-    }
 
-    updateVisualization() {
-        const labels = this.values.map(point => point.x);
-        const data = this.values.map(point => point.y);
+        const sampled = [];
+        const bucketSize = (data.length - 2) / (threshold - 2);
+        let a = 0; // Initially the first point is included
+        let maxArea;
+        let area;
+        let nextA;
 
-        this.chart.data.labels = labels;
-        this.chart.data.datasets[0].data = data;
-        this.chart.update();
+        sampled.push(data[a]); // Always include the first point
 
-        this.lastUpdateTime = Date.now();
-        this.timeoutId = null;
+        for (let i = 0; i < threshold - 2; i++) {
+            const avgRangeStart = Math.floor((i + 1) * bucketSize) + 1;
+            const avgRangeEnd = Math.floor((i + 2) * bucketSize) + 1;
+            const avgRange = data.slice(avgRangeStart, avgRangeEnd);
+            
+            const avgX = avgRange.reduce((sum, point) => sum + point.x, 0) / avgRange.length;
+            const avgY = avgRange.reduce((sum, point) => sum + point.y, 0) / avgRange.length;
+            
+            const rangeStart = Math.floor(i * bucketSize) + 1;
+            const rangeEnd = Math.floor((i + 1) * bucketSize) + 1;
+            const range = data.slice(rangeStart, rangeEnd);
+
+            maxArea = -1;
+
+            for (let j = 0; j < range.length; j++) {
+                area = Math.abs((data[a].x - avgX) * (range[j].y - data[a].y) -
+                                (data[a].x - range[j].x) * (avgY - data[a].y));
+                if (area > maxArea) {
+                    maxArea = area;
+                    nextA = rangeStart + j;
+                }
+            }
+
+            sampled.push(data[nextA]); // Include the point with the largest area
+            a = nextA; // Set a to the selected point
+        }
+
+        sampled.push(data[data.length - 1]); // Always include the last point
+        return sampled;
     }
 }
 
