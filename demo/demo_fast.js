@@ -105,6 +105,10 @@ class DataHandler {
 
         // Callback for new memory entry
         this.onNewMemoryEntry = null;
+
+        // Callback for removing memory entry
+        this.onMemoryFull = null;
+
     }
 
     updateMemoryAndPendingSize({
@@ -229,9 +233,8 @@ class DataHandler {
             // If labeled, add to the memory entries
             if (transitionEntry.label !== UNLABELED_IDX) {
                 this.memoryEntries.unshift(transitionEntry);
-
-                // Add new column to the left and remove right column
                 
+                // Add new column to the left and remove right column
                 const simMemToPen = this.computeSingleSimilarity(
                     transitionEntry, this.pendingEntries, this.pendingSize
                 );
@@ -253,6 +256,10 @@ class DataHandler {
             // Remove the oldest memory entry
             const oldestEntry = this.memoryEntries.pop();
             oldestEntry.dispose();
+
+            if (this.onMemoryFull !== null) {
+                this.onMemoryFull();
+            }
         }
 
         // Update the softmax scores
@@ -295,7 +302,8 @@ class DataHandler {
         const similarities = tf.dot(queryFeatsTensor, keyFeatsTensor.transpose());
 
         // pad the similarities with zeros
-        const padLength = this.memorySize - keyEntries.length;
+        const padLength = Math.max(0, this.memorySize - keyEntries.length);
+
         const pad = tf.zeros([queryEntries.length, padLength]);
         this.similarities.assign(tf.concat([similarities, pad], 1));
 
@@ -515,10 +523,6 @@ class ModelHandler{
             tf.tidy(() => {
                 dataHandler.recomputeFeatures(this.model);
             });
-            // console.log(`Number of tensors: ${tf.memory().numTensors}`);
-            
-            similarityGridHandler.renderDataCards();
-            similarityGridHandler.renderSimilarities();
         }
     })};
 
@@ -537,7 +541,7 @@ class ModelHandler{
             const correct = tf.equal(tf.argMax(pred, 1), tf.argMax(data.labels, 1));
             return correct.sum().dataSync()[0] / data.labels.shape[0];
         });
-        this.trainAccuracies.push({y: accuracy});
+        this.trainAccuracies.push(accuracy);
 
         const lossFunction = tf.losses.softmaxCrossEntropy;
         const useFrozenBackbone = this.model.architecture.includes("mobilenet");
@@ -1975,9 +1979,12 @@ class EventHandler {
 
     async initializeModel() {
         await modelHandler.initializeModel({architecture: ARCHITECTURE, optimizer: OPTIMIZER});
-        dataHandler.onNewMemoryEntry = () => {
+        
+        dataHandler.onMemoryFull = () => {
             modelHandler.evaluateModel();
+            modelHandler.trainModel();
         }
+
         const button = document.getElementById("initializeWebcam");
         button.disabled = false;
         button.textContent = "Enable Webcam";
