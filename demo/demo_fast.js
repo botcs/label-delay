@@ -50,7 +50,7 @@ class DataEntry {
 
         // cast to integer
         this.label = parseInt(label);
-        
+
         this.id = DataEntry.count;
 
 
@@ -96,7 +96,6 @@ class DataHandler {
         this.memoryEntries = [];
         this.pendingEntries = [];
 
-
         // Store the cosine similarities
         this.similarities = tf.variable(tf.zeros([this.pendingSize, this.memorySize]));
 
@@ -109,6 +108,9 @@ class DataHandler {
         // Callback for removing memory entry
         this.onMemoryFull = null;
 
+        // This is storing all the provided raw images
+        // with their corresponding labels for potentially saving it later
+        this.labeledImages = [];
     }
 
     updateMemoryAndPendingSize({
@@ -128,18 +130,18 @@ class DataHandler {
             const oldestEntry = this.memoryEntries.pop();
             oldestEntry.dispose();
         }
-        
+
         // If the pending size is reduced, remove the oldest entries
         while (this.pendingEntries.length > pendingSize) {
             console.log('removing pending entry, size:', this.pendingEntries.length);
             const oldestEntry = this.pendingEntries.pop();
             oldestEntry.dispose();
         }
-        
+
         // Reinitialize the similarities and scores variables
         this.similarities.dispose();
         this.similarities = tf.variable(tf.zeros([pendingSize, memorySize]));
-        
+
         this.scores.dispose();
         this.scores = tf.variable(tf.zeros([pendingSize, memorySize]));
 
@@ -152,12 +154,12 @@ class DataHandler {
         }
         this.currentEntry = newEntry;
     }
-    
+
 
     unshiftAndPop(matrix, vector, dim) {
         // Add the vector to the matrix and remove the last vector
         // along the specified dimension
-        
+
         // const requiredShape = matrix.shape.slice(0, dim)
             // .concat(matrix.shape.slice(dim+1));
 
@@ -213,7 +215,7 @@ class DataHandler {
         return sim
     }
 
-    
+
     addDataEntry(dataEntry) { tf.tidy(() => {
         this.pendingEntries.unshift(dataEntry);
 
@@ -229,11 +231,11 @@ class DataHandler {
         if (this.pendingEntries.length > this.pendingSize) {
             // Remove the oldest pending entry
             const transitionEntry = this.pendingEntries.pop();
-            
+
             // If labeled, add to the memory entries
             if (transitionEntry.label !== UNLABELED_IDX) {
                 this.memoryEntries.unshift(transitionEntry);
-                
+
                 // Add new column to the left and remove right column
                 const simMemToPen = this.computeSingleSimilarity(
                     transitionEntry, this.pendingEntries, this.pendingSize
@@ -246,6 +248,12 @@ class DataHandler {
                 if (this.onNewMemoryEntry !== null) {
                     this.onNewMemoryEntry();
                 }
+
+                this.labeledImages.push({
+                    dataURL: transitionEntry.inData.dataURL,
+                    label: transitionEntry.label
+                });
+
             } else {
                 transitionEntry.dispose();
             }
@@ -269,14 +277,14 @@ class DataHandler {
     async updateSimilaritiesRow(rowIndex) {
         // Lazy update of the similarities
         const simPenToMem = this.computeSingleSimilarity(
-            this.pendingEntries[rowIndex], 
-            this.memoryEntries, 
+            this.pendingEntries[rowIndex],
+            this.memoryEntries,
             this.memorySize
         );
         // use tf assign to update the similarities
         const beforeRow = this.similarities.slice([0, 0], [rowIndex, -1]); // Slice before the row
         const afterRow = this.similarities.slice([rowIndex + 1, 0], [-1, -1]); // Slice after the row
-    
+
         // Concatenate the parts with the new row
         const similarities = tf.concat([beforeRow, tf.reshape(simPenToMem, [1, -1]), afterRow], 0);
         this.similarities.assign(similarities);
@@ -380,7 +388,7 @@ class ModelHandler{
             yLabel: "Loss",
         });
     }
-    
+
     async initializeModel({
         architecture = ARCHITECTURE,
         image_size = IMAGE_SIZE,
@@ -398,7 +406,7 @@ class ModelHandler{
         console.log(`Number of Classes: ${num_classes}`);
         console.log(`Number of Features: ${num_features}`);
         console.log(`Optimizer: ${optimizer}`);
-        
+
         this.model = new GenericModelConnector({
             architecture: architecture,
             image_size: image_size,
@@ -408,7 +416,7 @@ class ModelHandler{
             optimizer: optimizer
         });
         await this.model.loadModel();
-        
+
         this.numTrainIterations = 0;
 
         // Warm up model by optimizing one iteration on
@@ -434,7 +442,7 @@ class ModelHandler{
         const logit = memoryEntry.logit;
         const label = memoryEntry.label;
         const pred = memoryEntry.pred;
-        
+
         const lossFunction = tf.losses.softmaxCrossEntropy;
         const loss = lossFunction(
             tf.oneHot([label], NUM_CLASSES),
@@ -472,11 +480,11 @@ class ModelHandler{
 
         this.randomIdx = Math.floor(Math.random() * dataHandler.memoryEntries.length);
         this.randomIdx2 = Math.floor(Math.random() * dataHandler.memoryEntries.length);
-        
+
 
         // Read the IWM index from DataHandler
         const iwmIdx = tf.tidy(() => dataHandler.scores.argMax(1).dataSync()[0]);
-        
+
 
         const idxCatalog = {
             "newest": 0,
@@ -507,7 +515,7 @@ class ModelHandler{
         });
 
         this.updateModelParameters(data);
-        
+
         data.input.dispose();
         data.labels.dispose();
 
@@ -569,7 +577,7 @@ class ModelHandler{
                 } else {
                     console.log(`Training iteration: ${this.numTrainIterations} - Loss: ${loss.dataSync()}`);
                 }
-                this.trainLosses.push(loss.dataSync()[0]);  
+                this.trainLosses.push(loss.dataSync()[0]);
                 return loss;
             });
         }
@@ -592,7 +600,7 @@ class DataCard {
             shape: {width: 2*DataCard.unitSize, height: DataCard.unitSize}
         },
         // [  | F]
-        // [I |  ] 
+        // [I |  ]
         diagonal: {
             image: {x: 0, y: DataCard.unitSize},
             feature: {x: DataCard.unitSize, y: 0},
@@ -636,7 +644,7 @@ class DataCard {
             .append("clipPath")
             .attr("id", "clip-rounded-rect")
             .append("rect");
-        
+
         mainGroup.classed("datacard", true)
             .classed("category-" + this.dataEntry.label, true)
             .attr("data-id", this.dataEntry.id)
@@ -654,7 +662,7 @@ class DataCard {
             .attr("height", this.layout.shape.height)
             .attr("rx", 10)
             .attr("ry", 10);
-        
+
         const imgX = DataCard.unitSize*.05;
         const imgY = DataCard.unitSize*.05;
         const imgWidth = DataCard.unitSize*.9;
@@ -669,7 +677,7 @@ class DataCard {
 
         const imageGroup = mainGroup.append("g")
             .attr("transform", `translate(${this.layout.image.x}, ${this.layout.image.y})`);
-        
+
         imageGroup.append("image")
             .classed("datacard-image", true)
             .attr("xlink:href", this.dataEntry.inData.dataURL)
@@ -683,20 +691,20 @@ class DataCard {
             .classed("feature-group", true)
             .attr("transform", `translate(${this.layout.feature.x}, ${this.layout.feature.y})`);
 
-            
+
         let feat = await this.dataEntry.feat.data();
-        
+
         // since feat is in [-inf, inf] we need to map it to [0, 1]
         const maxFeatVal = d3.max(feat);
         const minFeatVal = d3.min(feat);
         feat = feat.map(d => (d - minFeatVal) / (maxFeatVal - minFeatVal));
-            
+
         const featPerRow = Math.ceil(Math.sqrt(feat.length));
         const pos = d3.scalePoint()
             .domain(d3.range(featPerRow))
             .range([0, DataCard.unitSize])
             .padding(.5);
-        
+
         featureGroup.selectAll("circle")
             .data(feat)
             .join("circle")
@@ -767,7 +775,7 @@ class DataCard {
         this.imageGroup.transition()
             .duration(DataCard.animationDuration/2)
             .attr("transform", `translate(${diagonalLayout.image.x}, ${diagonalLayout.image.y})`);
-            
+
 
         await this.featureGroup.transition()
             .duration(DataCard.animationDuration)
@@ -776,13 +784,13 @@ class DataCard {
 
         this.layout = DataCard.layouts[orientation];
         this.orientation = orientation;
-            
+
         // transition to diagonal
         this.background.transition()
             .duration(DataCard.animationDuration)
             .attr("width", this.layout.shape.width)
             .attr("height", this.layout.shape.height);
-        
+
         this.imageGroup.transition()
             .duration(DataCard.animationDuration)
             .attr("transform", `translate(${this.layout.image.x}, ${this.layout.image.y})`);
@@ -840,7 +848,7 @@ class PredCard {
         const mainGroup = parentGroup
             .append("g")
             .attr("transform", `translate(${this.position.x}, ${this.position.y})`);
-        
+
         const background = mainGroup.append("rect")
             .classed("predcard-background", true)
             .attr("width", DataCard.unitSize / NUM_CLASSES)
@@ -897,7 +905,7 @@ class PredCardHandler {
             throw new Error("PredCardHandler instance already exists");
         }
         PredCardHandler.instance = this;
-        
+
         this.predCard = null;
         this.dataCard = null;
         this.renderPromise = null;
@@ -915,14 +923,14 @@ class PredCardHandler {
 
         const currentDataEntry = dataHandler.currentEntry;
         this.dataCard = new DataCard(
-            currentDataEntry, 
+            currentDataEntry,
             {x: offset.x, y: offset.y},
             "horizontal"
         );
         await this.dataCard.createDOM(this.mainGroup);
-        
+
         this.predCard = new PredCard(
-            currentDataEntry, 
+            currentDataEntry,
             {
                 x: this.dataCard.layout.shape.width*1.05 + offset.x,
                 y: offset.y,
@@ -977,7 +985,7 @@ class SimilarityGridHandler {
     static instance = null;
 
     constructor({
-        memorySize = MEMORY_SIZE, 
+        memorySize = MEMORY_SIZE,
         pendingSize = PENDING_SIZE,
         offset = {x: 0, y: 0}
     } = {}) {
@@ -1017,9 +1025,9 @@ class SimilarityGridHandler {
         if (dataHandler.pendingSize !== this.pendingSize) {
             throw new Error("Pending size mismatch between DataHandler and SimilarityGridHandler");
         }
-        
+
         this.svg = d3.select("#similarity-grid");
-        
+
         // width is 1x[horizontal card] + (MEM+1)x[vertical card]
         this.boardWidth = DataCard.layouts["horizontal"].shape.width;
         this.boardWidth += (this.memorySize + 1) * DataCard.layouts["vertical"].shape.width;
@@ -1040,7 +1048,7 @@ class SimilarityGridHandler {
                 .attr("id", "mainDOMGroup")
                 .attr("transform", `translate(${this.offset.x}, ${this.offset.y})`);
         }
-        
+
         // draw the grid
         this.grid = this.mainDOMGroup.append("g")
             .attr("id", "grid");
@@ -1093,7 +1101,7 @@ class SimilarityGridHandler {
             .attr("transform", `rotate(-90 ${this.gridX(0) + DataCard.unitSize*.45} ${this.gridY(this.pendingSize) + DataCard.unitSize*.5})`)
             .attr("fill", "grey");
 
-        
+
 
         // Add group for the similarity matrix
         this.similarityGroup = this.mainDOMGroup.append("g")
@@ -1150,9 +1158,9 @@ class SimilarityGridHandler {
 
     setDOMPositions(padding = 0.0) {
         // we use a grid layout for the datacards
-        // on the left we have the pending entries 
+        // on the left we have the pending entries
         //      (top - newest -> bottom - oldest)
-        // on the bottom we have the labeled entries 
+        // on the bottom we have the labeled entries
         //      (left - newest -> right - oldest)
 
         // in the middle we have the similarity matrix
@@ -1256,7 +1264,7 @@ class SimilarityGridHandler {
         const numRows = scores.length;
         const numCols = scores[0].length;
         const maxScores = scores.map(row => d3.max(row)); // Maximum score per row
-    
+
         const barPadding = 0.3;
         const barWidth = DataCard.unitSize * (1 - barPadding);
         const barHeight = DataCard.unitSize * 0.95;
@@ -1273,16 +1281,16 @@ class SimilarityGridHandler {
             y -= barHeightScale(d, i);
             return y;
         };
-    
+
         const maxIndices = scores.map(row => d3.maxIndex(row));
-    
+
         function barOpacity(d, i) {
             if (i % numCols === maxIndices[Math.floor(i / numCols)]) {
                 return 1.0;
             }
             return .69;
         }
-    
+
         // find out if new values are added
         let duration = 10;
         if (this.similarityGroup.selectAll("rect").size() < scores.flat().length) {
@@ -1311,7 +1319,7 @@ class SimilarityGridHandler {
             .style("opacity", (d, i) => barOpacity(d, i))
             .attr("rx", 10)
             .attr("ry", 10);
-        
+
         // Draw arrows from max similarity to the equation
         if (this.arrowX1 === undefined) {
             this.arrowX1 = this.svg.append("path")
@@ -1326,7 +1334,7 @@ class SimilarityGridHandler {
                 .attr("fill", "none");
         }
 
-        
+
         // Define memory indices to pick from depending on polciy
         const idxCatalog = {
             "newest": 0,
@@ -1348,8 +1356,8 @@ class SimilarityGridHandler {
         this.arrowX1.transition()
         .duration(150)
         .attr("d", this.createVertConnector(startX1, endX1));
-        
-        
+
+
         // start is the bottom of the selected MemoryCard
         // const X2Idx = d3.min([maxIndices[0], this.memorySize - 1]);
         const X2Idx = idxCatalog[this.X2Policy];
@@ -1434,14 +1442,14 @@ class SimilarityGridHandler {
         await dataCard.createDOM(this.mainDOMGroup);
 
         this.pendingCards.unshift(dataCard);
-        
+
         let transitionCard = null
         if (this.pendingCards.length > this.pendingSize) {
             transitionCard = this.pendingCards.pop();
         }
         const asyncMoveCall = this.updatePendingPositions();
 
-            
+
         if (transitionCard !== null) {
             // if labeled, add to the memory entries
             if (transitionCard.dataEntry.label !== UNLABELED_IDX) {
@@ -1506,7 +1514,7 @@ class SimilarityGridHandler {
             .imageGroup
             .node()
             .getBoundingClientRect();
-        
+
         return {
             width: rect.width,
             height: rect.height
@@ -1519,7 +1527,7 @@ class SimilarityGridHandler {
 function frameToTensor(source) {
     // Read frame
     let frame = tf.browser.fromPixels(source)
-    
+
     // Resize
     // frame = frame.resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE]);
     frame = tf.image.resizeBilinear(frame, [IMAGE_SIZE, IMAGE_SIZE]);
@@ -1532,7 +1540,7 @@ function frameToTensor(source) {
 
     // Normalize to [0, 1]
     // frame = frame.toFloat().div(tf.scalar(255));
-    
+
     return frame;
 }
 
@@ -1573,14 +1581,14 @@ function captureWebcam() {
 
     // Draw the cropped area onto the canvas
     ctx.drawImage(
-        video, 
-        sourceX, 
-        sourceY, 
-        sourceWidth, 
-        sourceHeight, 
-        0, 
-        0, 
-        thumbnailSize, 
+        video,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        thumbnailSize,
         thumbnailSize
     );
 
@@ -1617,7 +1625,6 @@ async function loadImage(url) {
 async function createDataCard(label = UNLABELED_IDX, url = null) {
     if (similarityGridHandler.renderPromise !== null) {
         await similarityGridHandler.renderPromise;
-    
     }
     let inData;
     if (url !== null) {
@@ -1627,13 +1634,13 @@ async function createDataCard(label = UNLABELED_IDX, url = null) {
     const dataEntry = tf.tidy(() => {
         if (url === null) {
             inData = captureWebcam();
-        } 
+        }
         const outData = modelHandler.model.predict(inData.Tensor);
         const dataEntry = new DataEntry(inData, outData, label);
         dataHandler.addDataEntry(dataEntry);
         return dataEntry;
     });
-    
+
     await similarityGridHandler.addDataCard(dataEntry);
     console.log(`Added datacard with label ${label}`);
 }
@@ -1663,7 +1670,6 @@ class EventHandler {
         this.isStreamOn = false;
 
         this.similiarityGridFPS = new FPSCounter("SimilarityGrid FPS");
-
 
         // FOR DEBUG PURPOSES
         // Periodically log the number of tensors
@@ -1702,7 +1708,7 @@ class EventHandler {
         if (this.isStreamOn) {
             // Re-compute features for all data entries
             dataHandler.recomputeFeatures(modelHandler.model);
-            
+
             // Re-render the datacards and the similarities
             await similarityGridHandler.renderDataCards();
             await similarityGridHandler.renderSimilarities();
@@ -1726,7 +1732,7 @@ class EventHandler {
         await dataHandler.updateMemoryAndPendingSize({memorySize: newSize});
         modelHandler.updateRandomIdxs();
         await similarityGridHandler.updateMemorySize(newSize);
-        
+
         if (this.isStreamOn) {
             await new Promise(resolve => setTimeout(resolve, 500));
             // if the memory is not full, add card
@@ -1763,7 +1769,7 @@ class EventHandler {
         this.pendingSize = newSize;
         await dataHandler.updateMemoryAndPendingSize({pendingSize: newSize});
         await similarityGridHandler.updatePendingSize(newSize);
-        
+
         if (this.isStreamOn) {
             // if the pending is not full, add card
             if (dataHandler.pendingEntries.length < newSize) {
@@ -1777,7 +1783,7 @@ class EventHandler {
             dataHandler.updateSimilarities();
             await similarityGridHandler.renderSimilarities();
         }
-        
+
         // Allow new data to be added
         this.startRenderLoop();
     }
@@ -1799,7 +1805,7 @@ class EventHandler {
                 "sgd": tf.train.sgd
             }[optimizerString](learningRate);
         }
-        
+
         modelHandler.changeOptimizer(optimizer);
     }
 
@@ -1847,29 +1853,37 @@ class EventHandler {
         for (let i = 0; i < this.pendingSize; i++) {
             similarityGridHandler.pendingCards[i].dataEntry = dataHandler.pendingEntries[i];
         }
-        
+
         return Promise.all([
             similarityGridHandler.renderDataCards(),
             similarityGridHandler.renderSimilarities(),
         ]);
     }
-
-    updateData() {
+    async updateData(label=null, url=null) {
         if (this.renderPromise !== null) {
             return;
         }
+        // Three cases:
+        // 1 label and url is provided - use it
+        // 2 label and url is not provided:
+        //   2.1 webcam is initialized - capture webcam
+        //   2.2 webcam is not initialized - use cached data
+
+        const inData = url !== null ? await loadImage(url) : null;
 
         const dataEntry = tf.tidy(() => {
-            if (this.isWebcamInitialized) {
+            if (inData !== null && label !== null) {
+                const outData = modelHandler.model.predict(inData.Tensor);
+                return new DataEntry(inData, outData, label);
+            } else if (this.isWebcamInitialized) {
                 const inData = captureWebcam();
                 const outData = modelHandler.model.predict(inData.Tensor);
                 return new DataEntry(inData, outData, this.nextLabel);
-            } else {
-                const dataEntry = this.cachedDataEntry.clone();
-                dataEntry.label = this.nextLabel;
-                return dataEntry;
             }
+            this.cachedDataEntry.label = this.nextLabel;
+            return this.cachedDataEntry.clone();
         });
+
 
         tf.tidy(() => {
             dataHandler.updateCurrentEntry(dataEntry);
@@ -1890,7 +1904,7 @@ class EventHandler {
 
     _updateDOM() {
         const renderPromises = [predCardHandler.updateDOM()];
-        
+
         if (this.isStreamOn) {
             renderPromises.push(this.updateSimilarityGridDOM());
         }
@@ -1951,9 +1965,9 @@ class EventHandler {
         // Attempt to play video automatically
         video.setAttribute('autoplay', 'true');
         // Mute the video to allow autoplay without user interaction
-        video.setAttribute('muted', 'true'); 
+        video.setAttribute('muted', 'true');
         // This attribute is important for autoplay in iOS
-        video.setAttribute('playsinline', 'true'); 
+        video.setAttribute('playsinline', 'true');
 
         if (navigator.mediaDevices.getUserMedia) {
             video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true })
@@ -1979,7 +1993,7 @@ class EventHandler {
 
     async initializeModel() {
         await modelHandler.initializeModel({architecture: ARCHITECTURE, optimizer: OPTIMIZER});
-        
+
         dataHandler.onMemoryFull = () => {
             modelHandler.evaluateModel();
             modelHandler.trainModel();
@@ -1994,7 +2008,7 @@ class EventHandler {
         if (this.isStreamOn) {
             return;
         }
-        await fillSlots();
+        await fillEmptySlots();
         this.isStreamOn = true;
     }
 
@@ -2013,7 +2027,7 @@ class EventHandler {
 
     toggleTraining() {
         const button = d3.select("#trainModel");
-        
+
         if (this.trainInterval === undefined) {
             this.trainInterval = null;
         }
@@ -2056,8 +2070,99 @@ class EventHandler {
 }
 const eventHandler = new EventHandler();
 
+// FOR SAVING
+function saveAllImagesAsZip() {
+    const zip = new JSZip();
+    const labeledImages = dataHandler.labeledImages;
 
-async function fillSlots(useWebcam=true) {
+    for (let i = 0; i < labeledImages.length; i++) {
+        const label = labeledImages[i].label;
+        const dataURL = labeledImages[i].dataURL;
+        const imageData = dataURL.split(',')[1];
+
+        // Format the filename with a sequence number and label
+        const filename = `${String(i).padStart(6, '0')}_label${label}.jpg`;
+
+        // Add the image to the ZIP file
+        zip.file(filename, imageData, { base64: true });
+    }
+
+    // Generate the ZIP file and trigger download
+    zip.generateAsync({ type: 'blob' }).then((content) => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = 'labeled_images.zip';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+}
+
+async function loadImagesFromZip(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        console.log('No file selected');
+        return;
+    }
+
+    const zip = new JSZip();
+    const content = await file.arrayBuffer();
+
+    const zipContent = await zip.loadAsync(content);
+    const images = [];
+
+    // Get all filenames and sort them to maintain sequence
+    const filenames = Object.keys(zipContent.files).sort();
+
+    for (let filename of filenames) {
+        const fileData = zipContent.files[filename];
+
+        // Extract the label from the filename
+        const labelMatch = filename.match(/label(\d+)/);
+        const label = labelMatch ? parseInt(labelMatch[1]) : UNLABELED_IDX;
+
+        // Read the image data as a data URL
+        const dataURL = await fileData.async('base64').then((base64) => {
+            return 'data:image/jpeg;base64,' + base64;
+        });
+
+        images.push({ dataURL, label });
+    }
+
+
+    // Now, images[] contains all the images in sequence.
+
+    // Replay the images
+    replayLabeledImages(images);
+}
+
+
+function replayLabeledImages(images) {
+    let index = 0;
+    async function showNextImage() {
+        if (index >= images.length) {
+            return;
+        }
+        const dataURL = images[index].dataURL;
+        const label = images[index].label;
+
+        // Recreate the data card with the loaded image and label
+        // createDataCard(label, dataURL);
+
+        // While the slots are not filled create data cards
+        if (index < eventHandler.pendingSize + eventHandler.memorySize) {
+            await createDataCard(label, dataURL);
+        } else {
+            eventHandler.isStreamOn = true;
+            eventHandler.updateData(label, dataURL);
+        }
+        index++;
+        setTimeout(showNextImage, 50); // Adjust the delay as needed
+    }
+    showNextImage();
+}
+
+async function fillEmptySlots(useWebcam=true) {
     if (useWebcam) {
         // Fill the pending slots with webcam images
         for (let i = 0; i < eventHandler.memorySize; i++) {
@@ -2132,7 +2237,7 @@ let predCardHandler;
 function initializeBackend() {
     // Initialize dataHandler
     dataHandler = new DataHandler({memorySize: MEMORY_SIZE, pendingSize: PENDING_SIZE});
-    modelHandler = new ModelHandler();  
+    modelHandler = new ModelHandler();
 }
 
 
@@ -2220,6 +2325,14 @@ async function initializeFrontend() {
         .addEventListener("change", () => eventHandler.changeSelectionPolicy());
     document.getElementById("features-select")
         .addEventListener("change", () => eventHandler.changeFeatureUpdatePolicy());
+
+    document.getElementById('saveLabeledImagesButton').addEventListener('click', saveAllImagesAsZip);
+
+    document.getElementById('loadLabeledImagesButton').addEventListener('click', function() {
+        document.getElementById('loadLabeledImagesInput').click();
+    });
+
+    document.getElementById('loadLabeledImagesInput').addEventListener('change', loadImagesFromZip);
 
     await Promise.all([
         similarityGridHandler.initialize(),

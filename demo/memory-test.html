@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TensorFlow.js Memory Management Example</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+</head>
+<body>
+    <h1>TensorFlow.js Memory Management Example</h1>
+    <button onclick="runOperations()">Run Operations</button>
+    <button onclick="checkMemory()">Check Memory</button>
+
+    <script>
+        // Function to run operations and monitor memory usage
+        function runOperations() {
+            console.log('Memory Before Operations:', tf.memory());
+
+            // Using tf.tidy to automatically clean up after synchronous operations
+            const result = tf.tidy(() => {
+                const a = tf.tensor1d([1, 2, 3]);
+                const b = tf.tensor1d([1, 2, 3]);
+                const c = a.add(b);
+                return c;
+            });
+
+            // Output the result synchronously
+            result.data().then(data => {
+                console.log('Result:', data);
+                console.log('Memory After Operations:', tf.memory());
+                result.dispose();  // Explicitly dispose the result tensor
+            });
+        }
+
+        // Function to use tf.profile to get detailed insights
+        async function checkMemory() {
+            const profileInfo = await tf.profile(() => {
+                const x = tf.tensor1d([10, 20, 30]);
+                const y = tf.tensor1d([1, 2, 3]);
+                const z = x.mul(y);
+                z.dataSync(); // Force GPU sync to ensure all operations are finished
+                return z;
+            });
+
+            console.log('Profile Information:', profileInfo);
+        }
+    </script>
+</body>
+</html>

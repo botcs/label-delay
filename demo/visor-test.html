@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tfvis and Chart.js Example</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <script>
+        class VisLogger {
+            constructor({
+                name = "Log",
+                tab = "History",
+                xLabel = "Iteration",
+                yLabel = "Y",
+                height = 300,
+                updateInterval = 10,
+            }) {
+                this.values = [];
+                this.yLabel = yLabel;
+                this.surface = tfvis.visor().surface({ name: name, tab: tab });
+                this.axisSettings = { xLabel: xLabel, yLabel: yLabel, height: height };
+                this.updateInterval = updateInterval;
+
+                this.lastUpdateTime = 0;
+                this.timeoutId = null;
+
+                // Create a canvas element for Chart.js
+                this.canvas = document.createElement('canvas');
+                this.surface.drawArea.appendChild(this.canvas);
+
+                this.chart = new Chart(this.canvas, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: yLabel,
+                            data: [],
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1,
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: xLabel
+                                },
+                                ticks: {
+                                    animation: false // Disable animation for x-axis ticks
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: yLabel
+                                },
+                                ticks: {
+                                    animation: false // Disable animation for y-axis ticks
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            push(y) {
+                const x = this.values.length;
+                this.values.push({ x, y });
+                this.scheduleUpdate();
+            }
+
+            scheduleUpdate() {
+                const now = Date.now();
+                const timeSinceLastUpdate = now - this.lastUpdateTime;
+
+                if (timeSinceLastUpdate >= this.updateInterval) {
+                    this.updateVisualization();
+                } else {
+                    if (this.timeoutId) {
+                        clearTimeout(this.timeoutId); // Cancel the existing timeout
+                    }
+                    this.timeoutId = setTimeout(() => {
+                        this.updateVisualization();
+                    }, this.updateInterval - timeSinceLastUpdate);
+                }
+            }
+
+            updateVisualization() {
+                const labels = this.values.map(point => point.x);
+                const data = this.values.map(point => point.y);
+
+                this.chart.data.labels = labels;
+                this.chart.data.datasets[0].data = data;
+                this.chart.update();
+
+                this.lastUpdateTime = Date.now();
+                this.timeoutId = null;
+            }
+        }
+
+        // Example usage:
+        const logger = new VisLogger({ name: "Example Log", tab: "History" });
+        setInterval(() => {
+            logger.push(Math.random() * 100);
+        }, 10);
+    </script>
+</body>
+</html>

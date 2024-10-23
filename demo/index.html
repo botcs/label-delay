@@ -7,7 +7,7 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-    
+
       gtag('config', 'G-TCWJ0JB5KY');
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,7 +60,7 @@
 
         .datacard.category-2 .datacard-background {
             fill: #d9ead3;
-            stroke: #6aa84f; 
+            stroke: #6aa84f;
             stroke-width: 1px;
         }
         .datacard.category-2 circle {
@@ -194,7 +194,7 @@
             margin: auto;
             margin-top: 20vh;
         }
-        
+
         .slider {
             -webkit-appearance: none; /* Override default styles */
             appearance: none;
@@ -253,7 +253,7 @@
         }
 
 
-        
+
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
@@ -272,7 +272,7 @@
 
 <body>
     <h1>Label Delay in Online Continual Learning</h1>
-    
+
     <div class="svg-container prediction-container">
         <svg id="prediction-card" style="width: 25%;" viewBox="0 0 255 150"></svg>
     </div>
@@ -281,7 +281,7 @@
             <!-- disabled until model is not loaded-->
             <button id="initializeWebcam" disabled>Loading Model</button>
             <button id="startStream" disabled>Start Data Stream</button>
-        </div>  
+        </div>
     </div>
     <!-- <div class="svg-container" style="visibility: hidden;"> -->
     <div class="svg-container similarity-container">
@@ -305,7 +305,7 @@ The delay is implemented by moving the newest sample through the Pending Entries
             <br>
             Architecture:
             <select id="arch-select" title="
-Select the architecture of the model. 
+Select the architecture of the model.
 The model is either randomly initialized with a fixed seed for reproducibility,
 or it is pretrained on ImageNet and fine-tuned on the current task.
 WARNING: Selecting a pretrained model will reset the learned features.
@@ -383,7 +383,7 @@ Select the policy for selecting the second sample for each training step.
             30 FPS
         </div>
     </div>
-    
+
 
     <div id="video-container" style="visibility: hidden;">
         <video id="webcam" autoplay style="display: none;"></video>
@@ -391,16 +391,26 @@ Select the policy for selecting the second sample for each training step.
     </div>
     <script src="demo_fast.js"></script>
     <div id="explanation">
+
+        <!-- Button to save labeled images -->
+        <button id="saveLabeledImagesButton">Save Labeled Images</button>
+
+        <!-- Button to load labeled images -->
+        <button id="loadLabeledImagesButton">Load Labeled Images</button>
+
+        <!-- Hidden file input for loading images -->
+        <input type="file" id="loadLabeledImagesInput" style="display:none" />
+
         <h2>
             Manual:
         </h2>
         <p>
             This demo shows an instance of a realistic online learning problem.
             The stream of data points is collected from the webcam, and therefore it is under your full control how much the data-distribution is shifting.
-            
+
             When you press one of the "Add Category" buttons, the newest sample will be associated with the corresponding label.
             There is no restriction what you can teach to your computer, everything is computed locally on your device, i.e. no data is sent to the server at all.
-            
+
             In every step the data flows from the top of the Pending Entries to the bottom, and if the data point is labeled, it will be moved to the Memory Buffer.
 
             As you can see, there are a few slots in the Pending Entries, which means that
@@ -454,7 +464,7 @@ Select the policy for selecting the second sample for each training step.
             This is nicely animated in the beginning, but to avoid the moving parts, once the datacards fill up the edges of the grid, you will only see the content of the datacards being swapped out (instead of moving the cards themselves).
 
             When you change the Pending Entry or the Memory Buffer size, new datacards will be added or removed accordingly.
-        
+
             Similarly to the prediction card, the datacards are also showing the feature embeddings in a 3x3 grid.
             The color of the background of the datacard indicates the category of the sample.
         </p>
@@ -475,7 +485,7 @@ Select the policy for selecting the second sample for each training step.
                 <li>MobileNetV3 (ImageNet pretrained)</li>
             </ul>
             After the model selection you can start tuning the model parameters on the currently available memory samples, but be careful: the learned features are reset when the architecture is changed.
-            <!-- The model is a 2-layer convnet, randomly initialized with a fixed seed for reproducibility. 
+            <!-- The model is a 2-layer convnet, randomly initialized with a fixed seed for reproducibility.
             The model parameters are updated by pressing the "Train Model" button.
             The update takes a single SGD step with a learning rate of 0.001 on the two selected samples.
             The loss function is the cross-entropy loss. -->
