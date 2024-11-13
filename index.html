@@ -95,7 +95,7 @@
         a {
             color: black;
         }
-        
+
     </style>
 </head>
 
@@ -114,18 +114,19 @@
         <center>
             <h1>Label Delay in Continual Learning</h1>
             <h4>
-                <a href="https://botcs.github.io/academic/">Botos Csaba</a><sup>12</sup>*,  
-                <a href="https://cemse.kaust.edu.sa/vcc/people/person/wenxuan-zhang">Wenxuan Zhang</a><sup>3</sup>*, 
-                <a href="https://matthias.pw/">Matthias Müller</a><sup>2</sup>, 
-                <a href="https://sites.google.com/site/sernam">Ser-Nam Lim</a><sup>4</sup>,  
-                <a href="https://cemse.kaust.edu.sa/vcc/people/person/mohamed-elhoseiny">Mohamed Elhoseiny</a><sup>3</sup>,  
-                <a href="https://www.robots.ox.ac.uk/~phst/">Philip Torr</a><sup>1</sup>,  
+                <a href="https://botcs.github.io/academic/">Botos Csaba</a><sup>12</sup>*,
+                <a href="https://cemse.kaust.edu.sa/vcc/people/person/wenxuan-zhang">Wenxuan Zhang</a><sup>3</sup>*,
+                <a href="https://matthias.pw/">Matthias Müller</a><sup>2</sup>,
+                <a href="https://sites.google.com/site/sernam">Ser-Nam Lim</a><sup>4</sup>,
+                <a href="https://cemse.kaust.edu.sa/vcc/people/person/mohamed-elhoseiny">Mohamed Elhoseiny</a><sup>3</sup>,
+                <a href="https://www.robots.ox.ac.uk/~phst/">Philip Torr</a><sup>1</sup>,
                 <a href="https://www.adelbibi.com/">Adel Bibi</a><sup>1</sup></h4>
             <h5><sup>1</sup>University of Oxford, <sup>2</sup>Intel, <sup>3</sup>KAUST, <sup>4</sup>Facebook AI Research, * Equal contribution</h5>
 
+            <h5>In NeurIPS 2024</h5>
             <h5>
                 [<a href="./preprint_17032024.pdf">Paper</a>]
-                [<a href="https://github.com/botcs/label-delay-cl">Code</a> (coming soon)]
+                [<a href="https://github.com/botcs/label-delay-cl">Code</a>]
                 [<a href="./demo/">Demo</a>]
             </h5>
             <div id="fig1" class="main-fig">
@@ -153,7 +154,7 @@
                 </div>
                 <!-- The goal is to learn a model that can perform well on a sequence of tasks, where the labels for each task are delayed by a fixed number of steps. We propose a simple yet effective approach to model label delay, which we call <b>Delayed Labels</b>. We show that our approach can be used to model a wide range of label delay distributions, and that it can be easily integrated into existing continual learning methods. We evaluate our approach on a variety of continual learning benchmarks, and show that it consistently outperforms existing methods. -->
             </div>
-            
+
             <section>
                 <h2 style="text-align:left;">Where does label delay come from?</h2>
                 In many real world scenario, the time between making predictions and the feedback can be vastly different due to the inherent nature of the task.
@@ -282,15 +283,15 @@
                         </defs>
                     </svg>
                 </div>
-                In our proposed label delay experimental setting, we show the larger the delay the more challenging it is for Naïve, a method that relies only on older labeled data, to effectively classify new samples. 
-                This is due to a larger gap in distribution between the samples used for training and for evaluation. 
+                In our proposed label delay experimental setting, we show the larger the delay the more challenging it is for Naïve, a method that relies only on older labeled data, to effectively classify new samples.
+                This is due to a larger gap in distribution between the samples used for training and for evaluation.
                 This begs the question of whether the new unlabeled data can be used for training to improve over Naïve, as it is much more similar to the data that the model is evaluated on.
 
                 We propose four different paradigms for utilizing the unlabeled data, namely,
-                Importance Weighted Memory Sampling (<b>IWMS</b>), Semi-Supervised Learning via Pseudo-Labeling (<b>PL</b>), Self-Supervised Semi-Supervised Learning (<b>S4L</b>) and Test-Time Adaptation (<b>TTA</b>). 
+                Importance Weighted Memory Sampling (<b>IWMS</b>), Semi-Supervised Learning via Pseudo-Labeling (<b>PL</b>), Self-Supervised Semi-Supervised Learning (<b>S4L</b>) and Test-Time Adaptation (<b>TTA</b>).
                 We integrate several methods of each family into our setting and evaluate them under various delays and computational budgets.
                 We show that our method, IWMS not only improves the performance of Naïve on three out of four datasets, but also outperforms the ideal case in two different computational budget and delay scenario:
-                
+
 
             <div style="margin-top:20px; width:100%; text-align: center;">
                 <img src="fig-unsupervised.svg" style="width:95%; margin-top:20px; display: inline-block; vertical-align: middle; horizontal-align: middle;">
@@ -304,8 +305,8 @@
 
             <section>
                 <h2 style="text-align:left;">Future work</h2>
-                In this project, we have demonstrated the versatility of our proposed setting in modeling various label delay scenarios. 
-                A key presumption in our methodology is that the rate at which data is collected is <i>identical</i> to the rate at which labels are assigned. However, this assumption doesn't always hold true in practical situations. By allowing the rates of data collection and label assignment to be modeled independently, our method could be adapted for a broader array of applications where these two rates are not identical. 
+                In this project, we have demonstrated the versatility of our proposed setting in modeling various label delay scenarios.
+                A key presumption in our methodology is that the rate at which data is collected is <i>identical</i> to the rate at which labels are assigned. However, this assumption doesn't always hold true in practical situations. By allowing the rates of data collection and label assignment to be modeled independently, our method could be adapted for a broader array of applications where these two rates are not identical.
                 Although our current model anticipates that each data sample will be assigned a label after a specific number of steps (exactly $d$ steps), this may not be feasible in real-world conditions where data accumulates faster than labels can be assigned, potentially leaving some samples unlabeled indefinitely.
                 In such cases, the choice which samples are labeled and which are not is not arbitrary, but rather a strategic decision that can have a significant impact on the performance of the model.
                 This is especially true in the case of continual learning, where the model is expected to perform well on the most recent data.
@@ -327,7 +328,7 @@
                         </defs>
                     </svg>
                 </div>
-            
+
             In the figure above, we implement the simplest possible strategy, where the samples are labeled in the order they are collected.
             We denote each annotator with their corresponding ID, therefore $\#1,\#2,\#3,...$ are the first, second, third annotators, respectively.
             In this example each annotator takes $d=4$ steps, and can only start labeling the next samples once they have finished labeling their assigned ones.
