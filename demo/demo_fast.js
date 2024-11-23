@@ -2016,6 +2016,11 @@ class EventHandler {
         });
 
         this.isWebcamInitialized = true;
+        const startStreamButton = document.getElementById("startStream");
+        startStreamButton.disabled = false;
+
+        const loadStreamButton = document.getElementById("loadStream");
+        loadStreamButton.disabled = true;
     }
 
     async initializeModel() {
@@ -2041,7 +2046,7 @@ class EventHandler {
         if (this.isStreamOn) {
             return;
         }
-        streamButton = document.getElementById("startStream");
+        const streamButton = document.getElementById("startStream");
         streamButton.disabled = true;
         streamButton.textContent = "Adding Cards";
         await fillEmptySlots();
@@ -2049,7 +2054,7 @@ class EventHandler {
         this.isStreamOn = true;
 
         const saveStreamButton = document.getElementById("saveStream");
-
+        saveStreamButton.disabled = false;
     }
 
     startRenderLoop() {

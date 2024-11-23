@@ -105,7 +105,7 @@
             font-size: 2vw;
             margin-top: 1em;
             display: flex;
-            /* justify-content: space-around; */
+            justify-content: space-around;
         }
 
         .control-panel button {
@@ -293,7 +293,7 @@
         <button id="addCategory0" class="addCategoryButton">Add Category 1</button>
         <button id="addCategory1" class="addCategoryButton" >Add Category 2</button>
         <button id="addCategory2" class="addCategoryButton">Add Category 3</button>
-        <button id="trainModel">Train Model</button>
+        <button id="trainModel">Update Model</button>
     </div>
     <div class="control-panel">
         <div class="low-level-controls">
@@ -429,7 +429,7 @@ Select the policy for selecting the second sample for each training step.
             As you can see, there are a few slots in the Pending Entries, which means that
             the newest sample will not be available for training until the sample does not receive it's label.
 
-            You can train the model by pressing the "Train Model" button, which will update the model parameters based on the selected samples.
+            You can train the model by pressing the "Update Model" button, which will update the model parameters based on the selected samples.
         </p>
         <p>
             The main purpose of this simulation is to highlight how label delay can affect the performance of the model.
@@ -499,11 +499,11 @@ Select the policy for selecting the second sample for each training step.
             </ul>
             After the model selection you can start tuning the model parameters on the currently available memory samples, but be careful: the learned features are reset when the architecture is changed.
             <!-- The model is a 2-layer convnet, randomly initialized with a fixed seed for reproducibility.
-            The model parameters are updated by pressing the "Train Model" button.
+            The model parameters are updated by pressing the "Update Model" button.
             The update takes a single SGD step with a learning rate of 0.001 on the two selected samples.
             The loss function is the cross-entropy loss. -->
 
-            When you click on the "Train Model" button, a green bar will start to fill up, indicating the cycles in which the model parameters are updated (set to 3 sec).
+            When you click on the "Update Model" button, a green bar will start to fill up, indicating the cycles in which the model parameters are updated (set to 3 sec).
             In every iteration, the standard Cross Entropy objective is optimized on two samples: $X_1$ and $X_2$.
 
         </p>
