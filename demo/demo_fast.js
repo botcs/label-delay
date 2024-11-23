@@ -7,7 +7,7 @@ const NUM_CLASSES = 3;
 const NUM_FEATURES = 3*3;
 const UNLABELED_IDX = 42;
 
-const MEMORY_SIZE = 25;
+const MEMORY_SIZE = 10;
 const PENDING_SIZE = 1;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -1662,6 +1662,7 @@ class EventHandler {
         this.renderPromise = null;
         this.isRendering = false;
         this.isWebcamInitialized = false;
+        this.replayDataList = [];
 
         this.nextLabel = UNLABELED_IDX;
         this.lastRender = performance.now();
@@ -1839,7 +1840,6 @@ class EventHandler {
         // but only moving the content and not the DOM elements
 
         const newestDataEntry = dataHandler.currentEntry.clone();
-        newestDataEntry.setLabel(this.nextLabel);
         dataHandler.addDataEntry(newestDataEntry);
     }
 
@@ -1859,30 +1859,42 @@ class EventHandler {
             similarityGridHandler.renderSimilarities(),
         ]);
     }
-    async updateData(label=null, url=null) {
+    async updateData() {
         if (this.renderPromise !== null) {
             return;
         }
         // Three cases:
-        // 1 label and url is provided - use it
-        // 2 label and url is not provided:
+        // 1 replayDataList is not empty - use it
+        // 2 replayDataList is empty:
         //   2.1 webcam is initialized - capture webcam
         //   2.2 webcam is not initialized - use cached data
 
-        const inData = url !== null ? await loadImage(url) : null;
+        // Throw error if the model is not initialized
+        if (modelHandler.model === null) {
+            throw new Error("Model is not initialized");
+        }
 
-        const dataEntry = tf.tidy(() => {
-            if (inData !== null && label !== null) {
-                const outData = modelHandler.model.predict(inData.Tensor);
-                return new DataEntry(inData, outData, label);
-            } else if (this.isWebcamInitialized) {
-                const inData = captureWebcam();
-                const outData = modelHandler.model.predict(inData.Tensor);
-                return new DataEntry(inData, outData, this.nextLabel);
-            }
-            this.cachedDataEntry.label = this.nextLabel;
-            return this.cachedDataEntry.clone();
-        });
+        let dataEntry;
+        if (this.replayDataList.length > 0) {
+            const replayData = this.replayDataList.shift();
+            // log the replay data
+            const {label, dataURL} = replayData;
+            const inData = await loadImage(dataURL);
+            dataEntry = tf.tidy(() => {
+                    const outData = modelHandler.model.predict(inData.Tensor);
+                    return new DataEntry(inData, outData, label);
+            });
+        } else {
+            dataEntry = tf.tidy(() => {
+                if (this.isWebcamInitialized) {
+                    const inData = captureWebcam();
+                    const outData = modelHandler.model.predict(inData.Tensor);
+                    return new DataEntry(inData, outData, this.nextLabel);
+                }
+                this.cachedDataEntry.label = this.nextLabel;
+                return this.cachedDataEntry.clone();
+            });
+        }
 
 
         tf.tidy(() => {
@@ -1943,15 +1955,15 @@ class EventHandler {
         d3.selectAll(".addCategoryButton").classed("active", false);
     }
 
-    renderLoop() {
+    async renderLoop() {
         if (!this.isRendering) {
             return;
         }
 
         if (performance.now() - this.lastRender > 1000 / REFRESH_RATE) {
             this.lastRender = performance.now();
-            this.updateData();
-            this.updateDOM();
+            await this.updateData();
+            await this.updateDOM();
         }
         window.requestAnimationFrame(() => {
             this.renderLoop();
@@ -2137,29 +2149,20 @@ async function loadImagesFromZip(event) {
 }
 
 
-function replayLabeledImages(images) {
-    let index = 0;
-    async function showNextImage() {
-        if (index >= images.length) {
-            return;
-        }
-        const dataURL = images[index].dataURL;
-        const label = images[index].label;
+async function replayLabeledImages(images) {
+    const numDataCards = eventHandler.pendingSize + eventHandler.memorySize;
+    for (let i = 0; i < numDataCards; i++) {
+        const { label, dataURL } = images.shift();
+        await createDataCard(label, dataURL);
 
-        // Recreate the data card with the loaded image and label
-        // createDataCard(label, dataURL);
-
-        // While the slots are not filled create data cards
-        if (index < eventHandler.pendingSize + eventHandler.memorySize) {
-            await createDataCard(label, dataURL);
-        } else {
-            eventHandler.isStreamOn = true;
-            eventHandler.updateData(label, dataURL);
-        }
-        index++;
-        setTimeout(showNextImage, 50); // Adjust the delay as needed
+        // sleep for 50ms
+        await new Promise(resolve => setTimeout(resolve, 50));
     }
-    showNextImage();
+
+    // Now the slots are filled, start the stream
+    // and let the event handler consume the remaining images
+    eventHandler.isStreamOn = true;
+    eventHandler.replayDataList = images;
 }
 
 async function fillEmptySlots(useWebcam=true) {
