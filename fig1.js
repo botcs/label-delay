@@ -55,10 +55,10 @@ function makeCurlyBrace(x1,y1,x2,y2,w,q){
     var qy4 = (y1 - .75*len*dy) - (1-q)*w*dx;
 
     return ( "M " +  x1 + " " +  y1 +
-        " Q " + qx1 + " " + qy1 + " " + qx2 + " " + qy2 + 
+        " Q " + qx1 + " " + qy1 + " " + qx2 + " " + qy2 +
         " T " + tx1 + " " + ty1 +
         " M " +  x2 + " " +  y2 +
-        " Q " + qx3 + " " + qy3 + " " + qx4 + " " + qy4 + 
+        " Q " + qx3 + " " + qy3 + " " + qx4 + " " + qy4 +
         " T " + tx1 + " " + ty1 );
 }
 
@@ -192,7 +192,7 @@ function addRectangle() {
         .attr("y", baseY)  // Adjust starting y coordinate based on crop details
         .attr("clip-path", "url(#clip-rounded-rect)")
         .classed("grayscale", true);
-    
+
     // Determine the aspect ratio of the image
     getImageSize(imageUrl).then(size => {
         const aspectRatio = size.width / size.height;
@@ -211,7 +211,7 @@ function addRectangle() {
     labelgroup = group.append("g")
         .attr("class", "label-group")
         .attr("transform", "translate(0, 0)");
-        
+
         // Container rectangle
         labelgroup.append("rect")
         .attr("class", "label-container")
@@ -237,7 +237,7 @@ function addRectangle() {
             .text(imageUrl)
             .attr("stroke-width", "2px")
             .style("fill", "#A7D397");
-    
+
         labelText = labelgroup.append("text")
             .attr("class", "label-text")
             .attr("x", rectSize / 2)
@@ -253,8 +253,8 @@ function addRectangle() {
     // Add the tick on the timeline
     tick = group.append("g")
         .attr("class", "timeline-tick");
-    
-    
+
+
     tick.append("line")
         .attr("x1", rectSize / 2)
         .attr("y1", timelineHeight - 5)
@@ -276,8 +276,8 @@ function addRectangle() {
         ticktext.style("font-weight", "bold").style("font-size", "30px");
 
     }
-    
-    
+
+
     cloudImage.raise();
     annotImageBG.raise();
     annotImage.raise();
@@ -295,7 +295,7 @@ document.addEventListener('visibilitychange', async () => {
     } else if (document.visibilityState === "visible") {
         if (interval === null) {
             interval = setInterval(
-                addRectangle, 
+                addRectangle,
                 shiftDuration
             );
         }
@@ -309,13 +309,13 @@ timeline = svg.append("g")
     .attr("transform", "translate(0, 0)");
 
 timeline.append("line")
-    .attr("x1",0)  
+    .attr("x1",0)
     .attr("y1",timelineHeight)
     .attr("x2",width-220)
-    .attr("y2",timelineHeight)  
-    .attr("stroke","black")  
-    .attr("stroke-width",2)  
-    .attr("marker-end","url(#arrow)");  
+    .attr("y2",timelineHeight)
+    .attr("stroke","black")
+    .attr("stroke-width",2)
+    .attr("marker-end","url(#arrow)");
 
 timeline.append("text")
     .attr("x", 70)
@@ -384,8 +384,8 @@ delayed_legend.append("text")
 // add a button to change the label delay
 function increaseLabelDelay() {
     labelDelay = labelDelay % 5 + 1;
-    
-    
+
+
     // update the curly brace
     old_brace_x1 = brace_x1;
     brace_x1 = width - annotImage.attr("width") - labelDelay * shiftAmount;
@@ -417,7 +417,7 @@ function increaseLabelDelay() {
 
 }
 
- 
+
     delayed_legend.append("rect")
         .attr("class", "button-rect")
         .attr("x", 25)
