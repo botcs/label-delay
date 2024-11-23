@@ -437,6 +437,12 @@ class ModelHandler{
 
     }
 
+    updateRandomSeed(seed) {
+        this.seed = seed;
+        Math.seedrandom(seed);
+        console.log(`Random seed updated to: ${this.seed}`);
+    }
+
     evaluateModel(memoryEntryIdx=0) {
         const memoryEntry = dataHandler.memoryEntries[memoryEntryIdx];
         const logit = memoryEntry.logit;
@@ -1789,6 +1795,11 @@ class EventHandler {
         this.startRenderLoop();
     }
 
+    changeRandomSeed() {
+        const seed = parseInt(d3.select("#random-seed-input").node().value);
+        modelHandler.changeRandomSeed(seed);
+    }
+
     changeOptimizer() {
         // Read the current value from the select element
         const optimizerString = d3.select("#optimizer-select").node().value;
@@ -1831,6 +1842,11 @@ class EventHandler {
     changeFeatureUpdatePolicy() {
         const policy = d3.select("#features-select").node().value;
         modelHandler.updateFeatures = policy === true;
+    }
+
+    changeTrainOnNewData() {
+        const trainOnNewData = d3.select("#train-on-new-select").node().value === "True";
+        this.trainOnNewData = trainOnNewData;
     }
 
     updateSimilarityGridData() {
@@ -1999,7 +2015,6 @@ class EventHandler {
             });
         });
 
-        document.getElementById("startStream").disabled = false;
         this.isWebcamInitialized = true;
     }
 
@@ -2008,20 +2023,33 @@ class EventHandler {
 
         dataHandler.onMemoryFull = () => {
             modelHandler.evaluateModel();
-            modelHandler.trainModel();
+            if (this.trainOnNewData) {
+                modelHandler.trainModel();
+            }
         }
 
-        const button = document.getElementById("initializeWebcam");
-        button.disabled = false;
-        button.textContent = "Enable Webcam";
+        const webcamButton = document.getElementById("initializeWebcam");
+        webcamButton.disabled = false;
+        webcamButton.textContent = "Enable Webcam";
+
+        const loadStreamButton = document.getElementById("loadStream");
+        loadStreamButton.disabled = false;
+
     }
 
     async startStream() {
         if (this.isStreamOn) {
             return;
         }
+        streamButton = document.getElementById("startStream");
+        streamButton.disabled = true;
+        streamButton.textContent = "Adding Cards";
         await fillEmptySlots();
+        streamButton.textContent = "Stream Started";
         this.isStreamOn = true;
+
+        const saveStreamButton = document.getElementById("saveStream");
+
     }
 
     startRenderLoop() {
@@ -2037,47 +2065,8 @@ class EventHandler {
         // this will interrupt the render loop
     }
 
-    toggleTraining() {
-        const button = d3.select("#trainModel");
-
-        if (this.trainInterval === undefined) {
-            this.trainInterval = null;
-        }
-
-        if (this.trainInterval !== null) {
-            clearInterval(this.trainInterval);
-            button.style("background", `white`)
-                .text("Toggle Training")
-                .transition()
-                .duration(TRAIN_REPEAT_INTERVAL)
-                .style("background", `white`);
-            this.trainInterval = null;
-        } else {
-            button.text("Stop Training")
-            let transition = button.style("background", `linear-gradient(90deg, #6aa84f 0%, white 1%)`);
-            for (let i = 0; i < 30; i++) {
-                const percent = Math.floor(i * 100 / 30);
-                transition = transition.transition()
-                    .duration(TRAIN_REPEAT_INTERVAL / 30)
-                    .style("background", `linear-gradient(90deg, #6aa84f ${percent}%, white ${percent+1}%)`);
-            }
-
-            this.trainInterval = setInterval(async () => {
-
-                // The actual training happens here
-                // The rest is just frontend updates
-                modelHandler.trainModel();
-
-                let transition = button.style("background", `linear-gradient(90deg, #6aa84f 0%, white 0%)`);
-                for (let i = 0; i < 30; i++) {
-                    const percent = Math.floor(i * 100 / 30);
-                    transition = await transition.transition()
-                        .duration(TRAIN_REPEAT_INTERVAL / 30)
-                        .style("background", `linear-gradient(90deg, #6aa84f ${percent}%, white ${percent}%)`);
-                }
-
-            }, TRAIN_REPEAT_INTERVAL);
-        }
+    trainModel() {
+        modelHandler.trainModel();
     }
 }
 const eventHandler = new EventHandler();
@@ -2163,70 +2152,30 @@ async function replayLabeledImages(images) {
     // and let the event handler consume the remaining images
     eventHandler.isStreamOn = true;
     eventHandler.replayDataList = images;
+
+    const streamButton = document.getElementById("startStream");
+    streamButton.textContent = "Stream Started";
+
+    const saveStreamButton = document.getElementById("saveStream");
+    saveStreamButton.disabled = false;
 }
 
-async function fillEmptySlots(useWebcam=true) {
-    if (useWebcam) {
-        // Fill the pending slots with webcam images
-        for (let i = 0; i < eventHandler.memorySize; i++) {
-            await createDataCard(0);
-        }
-        for (let i = 0; i < eventHandler.pendingSize; i++) {
-            await createDataCard(UNLABELED_IDX);
-        }
-        modelHandler.randomIdx = Math.floor(Math.random() * dataHandler.memorySize);
-        modelHandler.randomIdx2 = Math.floor(Math.random() * dataHandler.memorySize);
-    } else {
-        // Randomly select images from the dataset to fill all slot
-        const data = [];
-        for (let i = 0; i < eventHandler.memorySize; i++) {
-            const label = Math.floor(Math.random() * 2);
-            const url = `demo-pretrain-data/${label}/image${i%5}.png`;
-            await createDataCard(label, url);
-        }
-        for (let i = 0; i < eventHandler.pendingSize; i++) {
-            const label = Math.floor(Math.random() * 2);
-            const url = `demo-pretrain-data/${label}/image${i%5}.png`;
-            await createDataCard(label, url);
-        }
+async function fillEmptySlots() {
+    // Check if the memory is full
+    if (dataHandler.memoryEntries.length === eventHandler.memorySize) {
+        return;
     }
-}
 
-function downloadAllImagesAsZip() {
-    const zip = new JSZip();
-    const categoryIndices = {};
+    // Fill the pending slots with webcam images
+    for (let i = 0; i < eventHandler.memorySize; i++) {
+        await createDataCard(0);
+    }
+    for (let i = 0; i < eventHandler.pendingSize; i++) {
+        await createDataCard(UNLABELED_IDX);
+    }
+    modelHandler.randomIdx = Math.floor(Math.random() * dataHandler.memorySize);
+    modelHandler.randomIdx2 = Math.floor(Math.random() * dataHandler.memorySize);
 
-    dataHandler.memoryEntries.forEach((dataEntry) => {
-        const category = dataEntry.label;
-        // Initialize the category index if not already done
-        if (!(category in categoryIndices)) {
-            categoryIndices[category] = 0;
-        }
-
-        const filename = `image${categoryIndices[category]}.jpg`;
-        // Assuming dataURL is in the format "data:image/jpg;base64,..."
-        const imageData = dataEntry.inData.dataURL.split(',')[1];
-
-        // Create a folder for the category if it doesn't exist
-        if (!zip.folder(category)) {
-            zip.folder(category);
-        }
-
-        // Add the image to the appropriate folder
-        zip.folder(category).file(filename, imageData, { base64: true });
-
-        // Increment the index for this category
-        categoryIndices[category]++;
-    });
-
-    zip.generateAsync({ type: 'blob' }).then((content) => {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(content);
-        link.download = 'images.zip';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    });
 }
 
 
@@ -2285,9 +2234,7 @@ async function initializeFrontend() {
     });
 
     document.getElementById("trainModel")
-        .addEventListener("click", () => eventHandler.toggleTraining());
-    document.getElementById("saveImages")
-        .addEventListener("click", downloadAllImagesAsZip);
+        .addEventListener("click", () => eventHandler.trainModel());
 
     // set the default value
     memSizeInput = document.getElementById("memory-size-input")
@@ -2316,26 +2263,34 @@ async function initializeFrontend() {
             eventHandler.updatePendingSize(value);
         });
 
+    // First column of the advanced settings UI
     document.getElementById("arch-select")
         .addEventListener("change", () => eventHandler.reinitializeModel());
     document.getElementById("optimizer-select")
         .addEventListener("change", () => eventHandler.changeOptimizer());
     document.getElementById("learning-rate-select")
         .addEventListener("change", () => eventHandler.changeOptimizer());
+    document.getElementById("random-seed-select")
+        .addEventListener("change", () => eventHandler.updateRandomSeed());
+
+    // Second column of the advanced settings UI
     document.getElementById("x1-policy-select")
         .addEventListener("change", () => eventHandler.changeSelectionPolicy());
     document.getElementById("x2-policy-select")
         .addEventListener("change", () => eventHandler.changeSelectionPolicy());
     document.getElementById("features-select")
         .addEventListener("change", () => eventHandler.changeFeatureUpdatePolicy());
+    document.getElementById('train-on-new-select')
+        .addEventListener('change', () => modelHandler.updateRandomIdxs());
 
-    document.getElementById('saveLabeledImagesButton').addEventListener('click', saveAllImagesAsZip);
 
-    document.getElementById('loadLabeledImagesButton').addEventListener('click', function() {
-        document.getElementById('loadLabeledImagesInput').click();
+    document.getElementById('saveStream').addEventListener('click', saveAllImagesAsZip);
+
+    document.getElementById('loadStream').addEventListener('click', function() {
+        document.getElementById('loadStreamInput').click();
     });
 
-    document.getElementById('loadLabeledImagesInput').addEventListener('change', loadImagesFromZip);
+    document.getElementById('loadStreamInput').addEventListener('change', loadImagesFromZip);
 
     await Promise.all([
         similarityGridHandler.initialize(),

@@ -281,6 +281,8 @@
             <!-- disabled until model is not loaded-->
             <button id="initializeWebcam" disabled>Loading Model</button>
             <button id="startStream" disabled>Start Data Stream</button>
+            <button id="loadStream" disabled>Load Stream</button>
+            <button id="saveStream" disabled>Save Stream</button>
         </div>
     </div>
     <!-- <div class="svg-container" style="visibility: hidden;"> -->
@@ -292,7 +294,6 @@
         <button id="addCategory1" class="addCategoryButton" >Add Category 2</button>
         <button id="addCategory2" class="addCategoryButton">Add Category 3</button>
         <button id="trainModel">Train Model</button>
-        <button id="saveImages">Save Images</button>
     </div>
     <div class="control-panel">
         <div class="low-level-controls">
@@ -337,6 +338,18 @@ WARNING: Selecting a pretrained model will reset the learned features.
                 <option value="0.01">0.01</option>
                 <option value="0.1">0.1</option>
             </select>
+            <br>
+            Random Seed:
+            <select id="random-seed-select" max="100000" title="
+The random seed is used to initialize the model parameters.
+The same seed will result in the same initialization.
+            ">
+                <option value="42" selected>42</option>
+                <option value="1337">1337</option>
+                <option value="12345">12345</option>
+            </select>
+
+
         </div>
         <div class="low-level-controls">
             Memory Buffer size:
@@ -367,6 +380,13 @@ Select the policy for selecting the second sample for each training step.
                 <option value="iwm" selected>Importance Weighted Memory</option>
             </select>
             <br>
+            Train on newest sample:
+            <select id="train-on-new-select">
+                <option value=null disabled select>Train on newest sample</option>
+                <option value=true selected>True</option>
+                <option value=false>False</option>
+            </select>
+            <br>
             Update features after training:
             <select id="features-select">
                 <option value=null disabled select>Update features</option>
@@ -391,15 +411,8 @@ Select the policy for selecting the second sample for each training step.
     </div>
     <script src="demo_fast.js"></script>
     <div id="explanation">
-
-        <!-- Button to save labeled images -->
-        <button id="saveLabeledImagesButton">Save Labeled Images</button>
-
-        <!-- Button to load labeled images -->
-        <button id="loadLabeledImagesButton">Load Labeled Images</button>
-
         <!-- Hidden file input for loading images -->
-        <input type="file" id="loadLabeledImagesInput" style="display:none" />
+        <input type="file" id="loadStreamInput" style="display:none" />
 
         <h2>
             Manual:
