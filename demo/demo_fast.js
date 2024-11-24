@@ -1654,7 +1654,6 @@ async function createDataCard(label = UNLABELED_IDX, url = null) {
 
 class EventHandler {
     static instance = null;
-
     constructor({memorySize = MEMORY_SIZE, pendingSize = PENDING_SIZE} = {}) {
         if (EventHandler.instance !== null) {
             throw new Error("EventHandler instance already exists");
@@ -1673,8 +1672,9 @@ class EventHandler {
         this.nextLabel = UNLABELED_IDX;
         this.lastRender = performance.now();
 
-        this.trainInterval = null;
+        this.updatesPerTimestep = 1;
         this.isStreamOn = false;
+        this.trainOnNewData = true;
 
         this.similiarityGridFPS = new FPSCounter("SimilarityGrid FPS");
 
@@ -1840,13 +1840,22 @@ class EventHandler {
     }
 
     changeFeatureUpdatePolicy() {
-        const policy = d3.select("#features-select").node().value;
-        modelHandler.updateFeatures = policy === true;
+        const policy = d3.select("#features-select").node().value === true;
+        modelHandler.updateFeatures = policy;
     }
 
     changeTrainOnNewData() {
         const trainOnNewData = d3.select("#train-on-new-select").node().value === "True";
         this.trainOnNewData = trainOnNewData;
+    }
+
+    changeUpdatesPerTimestep() {
+        const updatesPerTimestep = parseInt(d3.select("#updates-per-timestep-select").node().value);
+        // throw error if updatesPerTimestep is not between 1 and 5
+        if (updatesPerTimestep < 1 || updatesPerTimestep > 5) {
+            throw new Error("updatesPerTimestep must be between 1 and 5");
+        }
+        this.updatesPerTimestep = updatesPerTimestep;
     }
 
     updateSimilarityGridData() {
@@ -2029,7 +2038,7 @@ class EventHandler {
         dataHandler.onMemoryFull = () => {
             modelHandler.evaluateModel();
             if (this.trainOnNewData) {
-                modelHandler.trainModel();
+                this.trainModel();
             }
         }
 
@@ -2071,7 +2080,11 @@ class EventHandler {
     }
 
     trainModel() {
-        modelHandler.trainModel();
+        console.log(`Training model for ${this.updatesPerTimestep} updates`);
+        for (let i = 0; i < this.updatesPerTimestep; i++) {
+            console.log(`Training model ${i}`);
+            modelHandler.trainModel();
+        }
     }
 }
 const eventHandler = new EventHandler();
@@ -2275,8 +2288,8 @@ async function initializeFrontend() {
         .addEventListener("change", () => eventHandler.changeOptimizer());
     document.getElementById("learning-rate-select")
         .addEventListener("change", () => eventHandler.changeOptimizer());
-    document.getElementById("random-seed-select")
-        .addEventListener("change", () => eventHandler.updateRandomSeed());
+    document.getElementById("updates-per-timestep-select")
+        .addEventListener("change", () => eventHandler.changeUpdatesPerTimestep());
 
     // Second column of the advanced settings UI
     document.getElementById("x1-policy-select")

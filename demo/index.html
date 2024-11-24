@@ -339,7 +339,7 @@ WARNING: Selecting a pretrained model will reset the learned features.
                 <option value="0.1">0.1</option>
             </select>
             <br>
-            Random Seed:
+            <!-- Random Seed:
             <select id="random-seed-select" max="100000" title="
 The random seed is used to initialize the model parameters.
 The same seed will result in the same initialization.
@@ -347,8 +347,16 @@ The same seed will result in the same initialization.
                 <option value="42" selected>42</option>
                 <option value="1337">1337</option>
                 <option value="12345">12345</option>
+            </select> -->
+            # Parameter updates per timestep:
+            <select id="updates-per-timestep-select">
+                <option value="none" disabled>Select Updates per Timestep</option>
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
             </select>
-
 
         </div>
         <div class="low-level-controls">
