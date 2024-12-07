@@ -2331,11 +2331,6 @@ document.addEventListener('visibilitychange', async () => {
         if (eventHandler.isRendering) {
             console.log("Stopping the render loop");
             eventHandler.stopRenderLoop();
-
-            if (eventHandler.trainInterval !== null) {
-                console.log("Stopping the training interval");
-                eventHandler.toggleTraining();
-            }
         }
     } else if (document.visibilityState === "visible") {
         if (!eventHandler.isRendering) {
