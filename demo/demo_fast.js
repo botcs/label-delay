@@ -16,11 +16,11 @@ let REFRESH_RATE = 30;
 ////////////////////////////////////////
 // Machine Learning params
 ////////////////////////////////////////
-const LR = 0.0001;
+const LR = 0.01;
 // const MOMENTUM = 0.3;
-// const OPTIMIZER = tf.train.sgd(LR);
+const OPTIMIZER = tf.train.sgd(LR);
 // const OPTIMIZER = tf.train.momentum(LR, MOMENTUM);
-const OPTIMIZER = tf.train.adam(LR);
+// const OPTIMIZER = tf.train.adam(LR);
 // const ARCHITECTURE = "mobilenetv3";
 // const ARCHITECTURE = "cnn_base";
 // const ARCHITECTURE = "resnet18";
@@ -1017,7 +1017,7 @@ class SimilarityGridHandler {
         this.offset = offset;
 
         this.X1Policy = "random";
-        this.X2Policy = "iwm";
+        this.X2Policy = "random2";
 
         this.memoryCards = [];
         this.pendingCards = [];
@@ -1360,7 +1360,7 @@ class SimilarityGridHandler {
             y: parseInt(this.X_1.attr("y"))
         }
         this.arrowX1.transition()
-        .duration(150)
+        .duration(100)
         .attr("d", this.createVertConnector(startX1, endX1));
 
 

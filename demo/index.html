@@ -299,10 +299,15 @@
         <div class="low-level-controls">
             Delay (Pending Entry size):
             <input type="number" id="pending-size-input" value="3" min="1" max="100" title="
+            This is the number of steps that the newest sample will be delayed before being available for training.
+
+            The delay is implemented by moving the newest sample through the Pending Entries segment before it can be accessed for training.
+            " onkeydown="return false;">
+            <!-- <input type="number" id="pending-size-input" value="3" min="1" max="100" title="
 This is the number of steps that the newest sample will be delayed before being available for training.
 
 The delay is implemented by moving the newest sample through the Pending Entries segment before it can be accessed for training.
-            ">
+            "> -->
             <br>
             Architecture:
             <select id="arch-select" title="
@@ -324,18 +329,18 @@ WARNING: Selecting a pretrained model will reset the learned features.
             Optimizer:
             <select id="optimizer-select">
                 <option value="none" disabled>Select Optimizer</option>
-                <option value="adam" selected>Adam</option>
+                <option value="adam">Adam</option>
                 <option value="momentum">Momentum (0.9)</option>
-                <option value="sgd">SGD</option>
+                <option value="sgd" selected>SGD</option>
             </select>
             <br>
             Learning Rate:
             <select id="learning-rate-select">
                 <option value="none" disabled>Select Learning Rate</option>
                 <option value="0.00001">0.00001</option>
-                <option value="0.0001" selected>0.0001</option>
+                <option value="0.0001">0.0001</option>
                 <option value="0.001">0.001</option>
-                <option value="0.01">0.01</option>
+                <option value="0.01" selected>0.01</option>
                 <option value="0.1">0.1</option>
             </select>
             <br>
@@ -364,7 +369,7 @@ The same seed will result in the same initialization.
             <input type="number" id="memory-size-input" value="10" min="1" max="300" title="
 This is the number of samples that can be stored in the memory buffer.
 In each training step, two samples are selected from the memory buffer for training.
-            ">
+            " onkeydown="return false;">
             <br>
             $X_1$ selection policy:
             <select id="x1-policy-select" title="
@@ -382,10 +387,10 @@ Select the policy for selecting the first sample for each training step.
 Select the policy for selecting the second sample for each training step.
             ">
                 <option value=null disabled select>X_2 selection policy</option>
-                <option value="random2">Random</option>
+                <option value="random2" selected>Random</option>
                 <option value="newest">Newest</option>
                 <option value="second-newest">Second Newest</option>
-                <option value="iwm" selected>Importance Weighted Memory</option>
+                <option value="iwm">Importance Weighted Memory</option>
             </select>
             <br>
             Train on newest sample:
